@@ -1,0 +1,42 @@
+[package]
+name = "keepass4web-rs"
+authors = ["Viktor Liu"]
+version = "1.0.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+clap = { version = "4.4.6", features = ["derive"] }
+anyhow = { version = "1.0.75", features = ["backtrace"] }
+actix-server = "2.3.0"
+actix-files = "0.6.2"
+actix-web = "4"
+actix-session = { version = "0.8.0", features = ["cookie-session"] }
+tokio = { version = "1.0.0", features = ["rt", "rt-multi-thread", "macros"] }
+serde = { version = "1.0.188", features = ["derive"] }
+serde_json = "1.0.107"
+serde_yaml = "0.9.25"
+serde_millis = "0.1.1"
+base64 = "0.21.4"
+humantime-serde = "1.1.1"
+postcard = { version = "1.0.8", features = ["use-std"] }
+env_logger = { version = "0.10.0", features = [] }
+log = "0.4.20"
+ldap3 = "0.11.3"
+rand = "0.8.5"
+keepass = { git = "https://github.com/lixmal/keepass-rs", features = ["serialization", "save_kdbx4"] }
+futures-util = "0.3.28"
+zeroize = { version = "1.6.0", features = ["derive", "std"] }
+secrecy = "0.8.0"
+uuid = { version = "1.4.1", features = ["v4"] }
+regex = "1.9.6"
+mime = "0.3.17"
+secstr = { version = "0.5.1", features = ["serde"] }
+serde_path_to_error = "0.1.14"
+aes-gcm = { version = "0.10.3", features = ["zeroize", "std"] }
+constant_time_eq = "0.3.0"
+linux-keyutils = { version = "0.2.3", features = ["std"] }
+
+[dev-dependencies]
+clippy = "0.0.302"

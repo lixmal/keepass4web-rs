@@ -1,0 +1,216 @@
+@import url('node_modules/bootstrap/dist/css/bootstrap.min.css');
+
+body {
+    padding-top: 70px;
+    background-color: #ddd;
+}
+
+.kp-login {
+    margin-top: 65px !important;
+    padding: 15px;
+    width: auto;
+    height: auto;
+    min-height: 200px;
+    min-width: 320px;
+    max-width: 400px;
+    background-color: #f3f3f3;
+    margin:0 auto;
+    border-radius: 9px;
+    border: 1px solid ##c5c5c5;
+    text-align: center;
+}
+
+.login-inner {
+    margin:0 auto;
+    max-width: 380px;
+    width: auto;
+}
+
+.login>h4 {
+    font-size: 20px;
+    margin-left: 5px;
+    font-weight: 600;
+}
+
+.user {
+    margin-bottom: 5px;
+}
+
+.password {
+    margin-bottom: 15px;
+}
+
+.submit {
+    margin-top: 5px;
+}
+
+.login-error {
+    margin-top: 15px;
+    animation: blinker 1s linear;
+    margin-bottom: 0px;
+    padding-bttom: 0px;
+}
+
+@keyframes blinker {
+    50% { opacity: 0.0; }
+}
+
+.panel-body {
+    background-color: #EEEEEE;
+}
+
+/*
+** leave more space on mobile devices,
+** showing more letters of the label
+*/
+@media screen and (max-width: 767px) {
+    .panel-body {
+        padding-left: 5px;
+        padding-right: 5px;
+    }
+}
+
+.kp-files {
+    text-align: center;
+}
+
+.kp-fields {
+    text-align: center;
+}
+
+.backend-icon {
+    height: auto;
+    width: auto;
+    max-height: 25px;
+}
+
+.kp-entry-label {
+    width: 21%;
+    max-width: 120px;
+}
+
+.kp-entry-value {
+    width: 69%;
+}
+
+.kp-entry-buttons {
+    width: 91px;
+    max-width: 91px;
+}
+
+.kp-wrap {
+    text-overflow: ellipsis;
+    overflow: hidden;
+    white-space: nowrap;
+}
+
+.kp-wrap:hover {
+    text-overflow: clip;
+    white-space: pre-wrap;
+    word-break: break-all;
+}
+
+.kp-wrap:active {
+    text-overflow: clip;
+    white-space: pre-wrap;
+    word-break: break-all;
+}
+
+.kp-wrap-comment {
+    white-space: pre-wrap;
+}
+
+.kp-table {
+    table-layout: fixed;
+}
+
+.kp-icon {
+    height: auto;
+    width: auto;
+    max-width: 16px;
+    margin-right: 0.25em;
+}
+
+.dir-tree {
+    margin-bottom: 20px;
+}
+
+.loading-mask {
+    position: relative;
+}
+
+.loading-mask::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    background-color: rgba(0, 0, 0, 0.25);
+}
+
+@keyframes spin {
+    from {
+        transform: rotate(0deg);
+    }
+    to {
+        transform: rotate(359deg);
+    }
+}
+
+.loading-mask::after {
+    content: '';
+    position: absolute;
+    border-width: 3px;
+    border-style: solid;
+    border-color: transparent rgb(255, 255, 255) rgb(255, 255, 255);
+    border-radius: 50%;
+    width: 24px;
+    height: 24px;
+    top: calc(50% - 12px);
+    left: calc(50% - 12px);
+    animation: 2s linear 0s normal none infinite running spin;
+    filter: drop-shadow(0 0 2 rgba(0, 0, 0, 0.33));
+    z-index: 2000;
+}
+
+.treeview-header {
+    cursor: pointer;
+}
+
+.treeview-header:hover {
+    background-color: #F9F9F9;
+}
+
+.treeview-body {
+    background-color: #EEEEEE;
+}
+
+.treeview-body .list-group-item {
+    cursor: pointer;
+    padding: 3px 10px;
+    background-color: #EEEEEE;
+}
+
+.treeview-body .list-group-item:hover {
+    background-color: #F5F5F5;
+}
+
+.treeview-body span.indent {
+    margin-left: 10px;
+    margin-right: 10px;
+}
+
+.treeview-body img {
+    margin-left: 10px;
+}
+
+.groupview-body tr {
+    cursor: pointer;
+}
+
+.glyphicon-none:before {
+    content: "\2122";
+    color: transparent !important;
+}
+
