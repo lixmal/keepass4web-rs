@@ -1,0 +1,21 @@
+# rust
+/target
+
+# npm
+node_modules/
+public/scripts/bundle.js
+npm-debug.log
+
+# vim
+*.sw[a-z]
+
+# bootstrap
+public/fonts/*
+
+# data
+*.kdbx
+
+# jetbrains
+.idea
+
+config.test.yml
