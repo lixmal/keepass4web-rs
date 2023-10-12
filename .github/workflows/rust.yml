@@ -19,4 +19,4 @@ jobs:
       - name: Build
         run: cargo build --verbose --target-dir build
       - name: Run tests
-        run: cargo test --verbose --target-dir test
+        run: cargo test --verbose --target-dir build
