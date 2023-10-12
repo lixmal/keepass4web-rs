@@ -94,7 +94,7 @@ pub(crate) async fn db_is_open(session: &Session, config: &Config, db_cache: &Db
     // TODO: distinguish real errors from non-existent db/key etc (= actually closed db)
     // The current behavior may suggest that the database is closed, while in reality it could be
     // that the session, db cache or key backend is currently unavailable. But this should be very rare.
-    if let Err(_) = get_db(session, config, db_cache).await {
+    if get_db(session, config, db_cache).await.is_err() {
         let _ = _close_db(session, config, db_cache).await;
         return Ok(false);
     }
