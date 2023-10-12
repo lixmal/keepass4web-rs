@@ -245,17 +245,14 @@ async fn close_db(session: Session, config: Data<Config>, db_cache: Data<DbCache
 
 #[post("/logout")]
 async fn logout(session: Session, config: Data<Config>, db_cache: Data<DbCache>) -> impl Responder {
-    let u = match session.get::<String>(SESSION_KEY_USER) {
-        Ok(username) => username,
-        Err(err) => {
-            error!("failed to retrieve session: {}", err);
-            return HttpResponse::InternalServerError().json(json!(
-                {
-                    "success": true,
-                    "message": "failed to retrieve session",
-                }
-            ));
-        }
+    if let Err(err) = session.get::<String>(SESSION_KEY_USER) {
+        error!("failed to retrieve session: {}", err);
+        return HttpResponse::InternalServerError().json(json!(
+            {
+                "success": true,
+                "message": "failed to retrieve session",
+            }
+        ));
     };
 
 
