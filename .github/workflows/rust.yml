@@ -1,0 +1,21 @@
+name: Rust tests
+
+on:
+  push:
+    branches: [ "master" ]
+  pull_request:
+  
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      RUSTFLAGS: "-Ctarget-cpu=sandybridge -Ctarget-feature=+aes,+sse2,+sse4.1,+ssse3"
+    steps:
+    - uses: actions/checkout@v3
+    - name: Build
+      run: cargo build --verbose --target-dir build
+    - name: Run tests
+      run: cargo test --verbose --target-dir test
