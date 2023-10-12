@@ -15,7 +15,7 @@ auth_backend: 'Test'
 
 # file specific configuration, db_backend = 'Filesystem'
 Filesystem:
-    db_location: '/opt/keepass4web/db.kdbx'
+    db_location: './db.kdbx'
     # optional, storing key files on the filesystem is not recommended
     # keyfile_location: '/opt/keepass4web/db.kdbx'
 

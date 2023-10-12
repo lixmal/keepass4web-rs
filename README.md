@@ -106,13 +106,25 @@ The required syscalls are:
 - add_key
 - request_key
 
+There's an example seccomp profile [seccomp/keyring.json](seccomp/keyring.json) in the repo.
 
-**Make sure no other containers are running under the same user, or they will be able to access keys stored for keepass4web**.
+**Make sure no other containers are running under the same user, or they will be able to access keys stored for
+keepass4web**.
 
 This is best achieved by running rootless containers with a dedicated user for keepass4web.
 
 - [Docker](https://docs.docker.com/engine/security/rootless/)
 - [podman](https://github.com/containers/podman/blob/main/docs/tutorials/rootless_tutorial.md)
+
+Example:
+
+    docker run \
+      -p 8080:8080 -v ./config.yml:/conf/config.yml \
+      -v ./tests/test.kdbx:/db.kdbx \
+      --security-opt seccomp=seccomp/keyring.json \
+      ghcr.io/lixmal/keepass4web-rs:master
+
+(username/password/master password: `test`)
 
 ### Classic
 
