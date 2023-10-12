@@ -70,5 +70,5 @@ search:
 # Set a static key for sessions to survive server restarts.
 # session_secret_key: ''
 
-listen:  '127.0.0.1'
+listen:  '::'
 port:    8080
