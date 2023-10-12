@@ -12,6 +12,7 @@ pub enum AuthBackend {
 
 #[derive(Clone, Default, Deserialize)]
 pub enum DbBackend {
+    Test,
     #[default]
     Filesystem,
 }

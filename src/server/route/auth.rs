@@ -170,7 +170,7 @@ async fn db_login(session: Session, config: Data<Config>, db_cache: Data<DbCache
     }
 
     let db_backend = db_backend::new(&config, &session);
-    let db = match KeePass::from_backend(&config, &db_backend, &params) {
+    let db = match KeePass::from_backend(&config, db_backend.as_ref(), &params) {
         Ok(v) => v,
         Err(err) => {
             info!("db login from '{}': {}", username, err);

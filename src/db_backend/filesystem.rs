@@ -1,4 +1,4 @@
-use std::fs;
+use std::any::Any;
 use std::fs::File;
 use std::io::Read;
 
@@ -17,7 +17,7 @@ impl DbBackend for Filesystem {
         true
     }
 
-    fn get_db(&self) -> Result<Box<dyn Read>> {
+    fn get_db_read(&self) -> Result<Box<dyn Read>> {
         Ok(
             Box::new(File::open(
                 self.config.db_location.as_path()
@@ -25,7 +25,7 @@ impl DbBackend for Filesystem {
         )
     }
 
-    fn get_key(&self) -> Option<Result<Box<dyn Read>>> {
+    fn get_key_read(&self) -> Option<Result<Box<dyn Read>>> {
         // return key file only if the key file location was configured
         if let Some(loc) = self.config.keyfile_location.as_ref() {
             return match File::open(loc) {
@@ -39,8 +39,16 @@ impl DbBackend for Filesystem {
         None
     }
 
-    fn put_db(&self, db: &[u8]) -> Result<()> {
-        Ok(fs::write(self.config.db_location.as_path(), db)?)
+    fn get_db_write(&mut self) -> Result<Box<dyn std::io::Write>> {
+        Ok(
+            Box::new(File::open(
+                self.config.db_location.as_path()
+            )?)
+        )
+    }
+
+    fn as_any(&mut self) -> &mut dyn Any {
+        self
     }
 }
 

@@ -10,7 +10,6 @@ pub enum Field {
     Url,
 }
 
-
 #[derive(Clone, Deserialize)]
 #[serde(default)]
 pub struct Search {
