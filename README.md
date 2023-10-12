@@ -27,7 +27,7 @@
 
 A mobile-friendly web application that serves KeePass database on a web frontend.
 
-Written in Perl and JavaScript.
+Written in Rust and JavaScript.
 
 
 ## FEATURES
@@ -106,6 +106,14 @@ The required syscalls are:
 - add_key
 - request_key
 
+
+**Make sure no other containers are running under the same user, or they will be able to access keys stored for keepass4web**.
+
+This is best achieved by running rootless containers with a dedicated user for keepass4web.
+
+- [Docker](https://docs.docker.com/engine/security/rootless/)
+- [podman](https://github.com/containers/podman/blob/main/docs/tutorials/rootless_tutorial.md)
+
 ### Classic
 
 This requires rust installed, compile the binary:
@@ -116,14 +124,6 @@ This requires rust installed, compile the binary:
 Run the binary:
 
     target/release/keepass4web-rs
-
-
-**Make sure no other containers are running under the same user, or they will be able to access keys stored for keepass4web**.
-
-This is best achieved by running rootless containers with a dedicated user for keepass4web.
-
-- [Docker](https://docs.docker.com/engine/security/rootless/)
-- [podman](https://github.com/containers/podman/blob/main/docs/tutorials/rootless_tutorial.md)
 
 
 ## BACKENDS
