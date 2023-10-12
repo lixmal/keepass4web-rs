@@ -42,7 +42,7 @@ pub struct Entry {
 
 impl From<&keepass::db::Entry> for Entry {
     fn from(entry: &keepass::db::Entry) -> Self {
-        let mut files = vec![];
+        let files = vec![];
         let mut strings: HashMap<String, Option<String>> = Default::default();
         let mut protected: HashMap<String, ()> = Default::default();
 
@@ -97,14 +97,14 @@ impl Entry {
                 Field::Url => self.url.as_deref().unwrap_or_default(),
             };
 
-            if term.is_match(&match_str) {
+            if term.is_match(match_str) {
                 return true;
             }
         }
 
         if config.extra_fields && self.strings.is_some() {
             for (k, v) in self.strings.as_ref().unwrap() {
-                if term.is_match(&k) || term.is_match(v.as_deref().unwrap_or_default()) {
+                if term.is_match(k) || term.is_match(v.as_deref().unwrap_or_default()) {
                     return true;
                 }
             }

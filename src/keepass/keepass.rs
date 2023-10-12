@@ -71,7 +71,7 @@ impl KeePass {
         drop(self.db);
 
         // TODO: add some aad from the keepass db
-        Ok(Encrypted::encrypt(ser_db, &[], self.config.db_session_timeout)?)
+        Encrypted::encrypt(ser_db, &[], self.config.db_session_timeout)
     }
 
     pub fn from_backend(config: &Config, db_backend: &Box<dyn DbBackend>, params: &DbLogin) -> Result<Self> {
@@ -104,7 +104,7 @@ impl KeePass {
         )
     }
 
-    pub fn to_backend(self, db_backend: Box<dyn DbBackend>) -> Result<()> {
+    pub fn to_backend(self, _db_backend: Box<dyn DbBackend>) -> Result<()> {
         todo!();
         // let db = self.db.save(...)
         // db_backend.put_db(...)
@@ -177,13 +177,13 @@ impl KeePass {
 
         Ok(
             SecretString::new(
-                String::from_utf8_lossy(protected.unsecure().as_ref()).to_string()
+                String::from_utf8_lossy(protected.unsecure()).to_string()
             )
         )
     }
 
     pub fn get_file(&self, params: &Query<File>) -> Result<Vec<u8>> {
-        let entry = Self::find_entry_by_id(&self.db.root, &params.entry_id).ok_or(anyhow!("entry not found"))?;
+        let _entry = Self::find_entry_by_id(&self.db.root, &params.entry_id).ok_or(anyhow!("entry not found"))?;
 
         todo!()
     }
@@ -220,7 +220,7 @@ impl KeePass {
         let mut children: Vec<Group> = Vec::with_capacity(group.children.len());
         for node in &group.children {
             if let Node::Group(group) = node {
-                children.push(Self::find_all_groups(&group));
+                children.push(Self::find_all_groups(group));
             }
         }
         Group {
@@ -235,11 +235,11 @@ impl KeePass {
 
     pub(crate) fn find_group_by_id<'a>(group: &'a keepass::db::Group, id: &Uuid) -> Option<&'a keepass::db::Group> {
         if &group.uuid == id {
-            return Some(&group);
+            return Some(group);
         }
         for node in &group.children {
             if let Node::Group(group) = node {
-                let found = Self::find_group_by_id(&group, id);
+                let found = Self::find_group_by_id(group, id);
                 if found.is_some() {
                     return found;
                 }
@@ -253,7 +253,7 @@ impl KeePass {
         for node in &group.children {
             match node {
                 Node::Group(group) => {
-                    let found = Self::find_entry_by_id(&group, id);
+                    let found = Self::find_entry_by_id(group, id);
                     if found.is_some() {
                         return found;
                     }
@@ -269,13 +269,13 @@ impl KeePass {
         None
     }
 
-    pub(crate) fn find_entries_by_string<'a>(group: &'a keepass::db::Group, term: &Regex, config: &Search) -> Vec<Entry> {
+    pub(crate) fn find_entries_by_string(group: &keepass::db::Group, term: &Regex, config: &Search) -> Vec<Entry> {
         let mut entries = vec![];
 
         for node in &group.children {
             match node {
                 Node::Group(group) => {
-                    entries.append(&mut Self::find_entries_by_string(&group, &term, config));
+                    entries.append(&mut Self::find_entries_by_string(group, term, config));
                 }
                 Node::Entry(entry) => {
                     let entry: Entry = entry.into();
@@ -292,13 +292,12 @@ impl KeePass {
 
 #[cfg(test)]
 mod tests {
-    use std::fs::File;
+    
     use std::path::PathBuf;
 
     use actix_session::Session;
     use actix_web::{FromRequest, test};
     use actix_web::dev::Payload;
-    use keepass::{Database, DatabaseKey};
 
     use crate::auth::DbLogin;
     use crate::config::config::Config;

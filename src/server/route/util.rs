@@ -24,7 +24,7 @@ pub(crate) async fn _close_db(session: &Session, config: &Config, db_cache: &DbC
     let username = session.get_username();
 
     // This is idempotent and only fails if there is an issue with the cache backend
-    if let Err(err) = db_cache.clear(&session).await {
+    if let Err(err) = db_cache.clear(session).await {
         error!("close db from '{}': failed to clear db: {}", username, err);
         return Err(err_resp);
     }
@@ -38,7 +38,7 @@ pub(crate) async fn _close_db(session: &Session, config: &Config, db_cache: &DbC
 }
 
 pub(crate) async fn get_db(session: &Session, config: &Config, db_cache: &DbCache) -> anyhow::Result<KeePass, HttpResponse> {
-    let enc = match db_cache.retrieve(&session, config.db_session_timeout).await {
+    let enc = match db_cache.retrieve(session, config.db_session_timeout).await {
         Ok(v) => v,
         Err(err) => {
             error!("failed to retrieve db: {}", err);
@@ -74,7 +74,7 @@ pub(crate) async fn get_db(session: &Session, config: &Config, db_cache: &DbCach
         }
     };
 
-    return match KeePass::from_enc(config, key, enc) {
+    match KeePass::from_enc(config, key, enc) {
         Ok(v) => Ok(v),
         Err(err) => {
             error!("failed to decrypt database: {}", err);
@@ -87,7 +87,7 @@ pub(crate) async fn get_db(session: &Session, config: &Config, db_cache: &DbCach
                 ))
             )
         }
-    };
+    }
 }
 
 pub(crate) async fn db_is_open(session: &Session, config: &Config, db_cache: &DbCache) -> anyhow::Result<bool, HttpResponse> {
@@ -105,7 +105,7 @@ pub(crate) fn retrieve_key(config: &Config, session: &Session) -> anyhow::Result
     let key_id = session.get::<KeyId>(SESSION_KEY_KEY_ID)?
         .ok_or(anyhow!("failed to retrieve key id from session"))?;
 
-    Ok(SecretKey::retrieve(&key_id, config.db_session_timeout)?)
+    SecretKey::retrieve(&key_id, config.db_session_timeout)
 }
 
 pub(crate) fn store_key(config: &Config, session: &Session, mut key: SecretKey) -> anyhow::Result<()> {

@@ -39,7 +39,7 @@ impl Encrypted {
 
     pub fn decrypt(mut self, key: SecretKey, aad: &[u8]) -> Result<SecretVec<u8>> {
         let key = Key::<Aes256Gcm>::from_slice(key.expose_secret());
-        let cipher = Aes256Gcm::new(&key);
+        let cipher = Aes256Gcm::new(key);
         cipher.decrypt_in_place(Nonce::from_slice(&self.iv), aad, &mut self.data)?;
 
         let v = self.data[0..self.data.len() - LENGTH_IV].to_vec();
@@ -66,10 +66,10 @@ mod tests {
     fn enc_roundtrip() {
         let data = "some random string !@(as+=!#@_%$".to_string();
 
-        let (key, enc) = Encrypted::encrypt(data.clone().into_bytes(), &vec![1, 2, 3], Duration::from_secs(10)).unwrap();
-        let dec_data = enc.decrypt(key, &vec![1, 2, 3]).unwrap();
-        let a = dec_data.expose_secret().to_vec();
+        let (key, enc) = Encrypted::encrypt(data.clone().into_bytes(), &[1, 2, 3], Duration::from_secs(10)).unwrap();
+        let dec_data = enc.decrypt(key, &[1, 2, 3]).unwrap();
+        let _a = dec_data.expose_secret().to_vec();
 
-        assert_eq!(data.as_bytes().as_ref(), dec_data.expose_secret());
+        assert_eq!(data.as_bytes(), dec_data.expose_secret());
     }
 }

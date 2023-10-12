@@ -61,6 +61,6 @@ impl DbCache {
     }
 
     fn get_user(&self, session: &Session) -> Result<String> {
-        session.get::<String>(SESSION_KEY_USER)?.ok_or(anyhow!("unable to retrieve user from session").into())
+        session.get::<String>(SESSION_KEY_USER)?.ok_or(anyhow!("unable to retrieve user from session"))
     }
 }
