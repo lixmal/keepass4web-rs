@@ -21,7 +21,7 @@ RUN cargo build --bins --release
 
 FROM scratch
 
-COPY --from=build /workspace/public /
+COPY --from=build /workspace/public /public
 COPY --from=build /workspace/target/release/keepass4web-rs /keepass4web
 COPY config.yml /conf/
 
