@@ -30,7 +30,7 @@ futures-util = "0.3.28"
 zeroize = { version = "1.6.0", features = ["derive", "std"] }
 secrecy = "0.8.0"
 uuid = { version = "1.4.1", features = ["v4"] }
-regex = "1.9.6"
+regex = "1.10.0"
 mime = "0.3.17"
 secstr = { version = "0.5.1", features = ["serde"] }
 serde_path_to_error = "0.1.14"
