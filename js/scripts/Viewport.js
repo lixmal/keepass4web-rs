@@ -122,9 +122,10 @@ export default class Viewport extends React.Component {
                 this.setState({
                     tree: data.data.groups
                 })
-                this.onGroupSelect({
-                    id: data.data.last_selected
-                })
+                if (data.data.last_selected)
+                    this.onGroupSelect({
+                        id: data.data.last_selected
+                    })
             }.bind(this),
             error: KeePass4Web.error.bind(this)
         })

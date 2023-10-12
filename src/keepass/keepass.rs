@@ -118,10 +118,18 @@ impl KeePass {
 
 
     pub fn get_groups(&self) -> Result<(Group, Option<Uuid>)> {
+        let mut last_selected = self.db.meta.last_selected_group;
+
+        if let Some(v) = last_selected {
+            if Self::find_group_by_id(&self.db.root, &v).is_none() {
+                last_selected = None;
+            }
+        }
+
         Ok(
             (
                 Self::find_all_groups(&self.db.root),
-                self.db.meta.last_selected_group,
+                last_selected,
             )
         )
     }
