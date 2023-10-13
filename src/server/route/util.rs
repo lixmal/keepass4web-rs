@@ -6,7 +6,7 @@ use log::error;
 use serde_json::json;
 
 use crate::config::config::Config;
-use crate::keepass::db_cache::DbCache;
+use crate::keepass::db_cache::{CacheExpiredError, DbCache};
 use crate::keepass::keepass::KeePass;
 use crate::keepass::key::{KeyId, SecretKey};
 use crate::session::AuthSession;
@@ -42,12 +42,21 @@ pub(crate) async fn get_db(session: &Session, config: &Config, db_cache: &DbCach
         Ok(v) => v,
         Err(err) => {
             error!("failed to retrieve db: {}", err);
-            return Err(HttpResponse::InternalServerError().json(json!(
+
+            let resp = json!(
                 {
                     "success": false,
                     "message": "failed to retrieve db from cache",
                 }
-            )));
+            );
+            return match err.downcast_ref::<CacheExpiredError>() {
+                Some(_) => {
+                    _close_db(session, config, db_cache).await?;
+
+                    Err(HttpResponse::Unauthorized().json(resp))
+                }
+                None => Err(HttpResponse::InternalServerError().json(resp))
+            };
         }
     };
 
