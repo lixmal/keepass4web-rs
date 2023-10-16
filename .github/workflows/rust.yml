@@ -15,7 +15,7 @@ jobs:
       RUSTFLAGS: "-Ctarget-cpu=sandybridge -Ctarget-feature=+aes,+sse2,+sse4.1,+ssse3"
       RUST_BACKTRACE: full
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - name: Build
         run: cargo build --verbose --target-dir build
       - name: Run tests
