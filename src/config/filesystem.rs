@@ -12,8 +12,9 @@ pub struct Filesystem {
 
 impl Filesystem {
     pub(crate) fn validate(&self) -> Result<()> {
+        // TODO: allow empty if provided by auth backend
         if self.db_location.as_os_str().is_empty() {
-            bail!("db location must be specified");
+            bail!("Filesystem: db location must be specified");
         }
         Ok(())
     }

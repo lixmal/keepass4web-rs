@@ -26,6 +26,6 @@ async fn main() {
     let args = Args::parse();
     let config = Config::from_file(args.config).expect("Failed to parse config");
 
-    Server::new(config).expect("Failed to start server")
+    Server::new(config).await.expect("Failed to start server")
         .await.expect("Failed to stop server");
 }

@@ -45,12 +45,22 @@ KeePass4Web.checkAuth = function (nextState, replace, callback) {
                     state: state,
                     pathname: '/user_login'
                 })
-                // TODO: Don't redirect to backend if db is open
+            } else if (authData.user) {
+                let user = authData.user
+                if (user.type === 'redirect') {
+                    window.location = user.url
+                    // stopping javascript execution to prevent redirect loop
+                    throw 'Redirecting'
+                } else if (user.type === 'mask')
+                    replace({
+                        state: state,
+                        pathname: '/user_login'
+                    })
             } else if (!authData.backend) {
-                var template = KeePass4Web.getSettings().template
+                // TODO: Don't redirect to backend if db is open
+                let template = KeePass4Web.getSettings().template
                 if (template.type === 'redirect') {
                     window.location = template.url
-                    // stopping javascript execution to prevent redirect loop
                     throw 'Redirecting'
                 } else if (template.type === 'mask')
                     replace({

@@ -1,7 +1,8 @@
 use anyhow::{anyhow, bail, Result};
+use async_trait::async_trait;
 use ldap3::{ldap_escape, LdapConn, SearchEntry};
 
-use crate::auth_backend::{AuthBackend, UserInfo};
+use crate::auth_backend::{AuthBackend, AuthCache, LoginType, UserInfo};
 use crate::config::config::Config;
 use crate::config::ldap;
 
@@ -19,7 +20,12 @@ impl Ldap {
     }
 }
 
+#[async_trait]
 impl AuthBackend for Ldap {
+    fn get_login_type(&self, _: &str, _: &AuthCache) -> Result<LoginType> {
+        Ok(LoginType::Mask)
+    }
+
     fn login(&self, username: &str, password: &str) -> Result<UserInfo> {
         let mut ldap = LdapConn::new(self.config.uri.as_str())?;
 

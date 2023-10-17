@@ -1,21 +1,22 @@
 use std::future::{ready, Ready};
 
 use actix_session::SessionExt;
-use actix_web::{
-    body::EitherBody,
-    dev::{self, Service, ServiceRequest, ServiceResponse, Transform},
-    Error, HttpResponse,
-};
-use anyhow::Result;
+use actix_web::{body::EitherBody, dev::{self, Service, ServiceRequest, ServiceResponse, Transform}, Error, HttpRequest, HttpResponse};
+use actix_web::web::Data;
+use anyhow::{bail, Result};
 use constant_time_eq::constant_time_eq;
 use futures_util::future::LocalBoxFuture;
+use log::error;
 use rand::distributions::{Alphanumeric, DistString};
 use rand::thread_rng;
 use serde::{Deserialize, Deserializer};
 use serde_json::json;
 use zeroize::ZeroizeOnDrop;
 
-
+use crate::auth_backend;
+use crate::auth_backend::{AuthCache, LoginType};
+use crate::auth_backend::LoginType::Redirect;
+use crate::config::config::Config;
 use crate::server::route::STATIC_DIR;
 use crate::session::AuthSession;
 
@@ -29,6 +30,7 @@ pub(crate) const CSRF_HEADER: &str = "X-CSRF-Token";
 pub(crate) const ROUTE_ROOT: &str = "/";
 pub(crate) const ROUTE_ICON: &str = "/icon";
 pub(crate) const ROUTE_USER_LOGIN: &str = "/user_login";
+pub(crate) const ROUTE_CALLBACK_USER_AUTH: &str = "/callback_user_auth";
 
 
 #[derive(Deserialize, ZeroizeOnDrop)]
@@ -114,17 +116,36 @@ impl<S, B> Service<ServiceRequest> for CheckAuthMiddleware<S>
         if !request.get_session().is_authorized() {
             if request.path() != ROUTE_ROOT
                 && request.path() != ROUTE_USER_LOGIN
-                && !request.path().starts_with(format!("{}/", STATIC_DIR).as_str()) {
+                && request.path() != ROUTE_CALLBACK_USER_AUTH
+                && !request.path().starts_with(format!("{}/", STATIC_DIR).as_str())
+            {
                 let (request, _) = request.into_parts();
+                return Box::pin(async {
+                    let resp = match get_login_type(&request).await {
+                        Ok(login_type) => {
+                            HttpResponse::Unauthorized().json(json!(
+                               {
+                                   "success": false,
+                                   "message": "unauthorized",
+                                   "data": {
+                                       "user": login_type,
+                                   }
+                               }
+                            )).map_into_right_body()
+                        }
+                        Err(err) => {
+                            error!("failed to determine login type: {}", err);
+                            HttpResponse::Unauthorized().json(json!(
+                               {
+                                   "success": false,
+                                   "message": "unauthorized: failed to determine login type",
+                               }
+                            )).map_into_right_body()
+                        }
+                    };
 
-                let response = HttpResponse::Unauthorized().json(json!(
-                   {
-                       "success": false,
-                       "message": "unauthorized",
-                   }
-                )).map_into_right_body();
-
-                return Box::pin(async { Ok(ServiceResponse::new(request, response)) });
+                    Ok(ServiceResponse::new(request, resp))
+                });
             }
         }
         // CSRF token is required for all routes from the moment user auth succeeds
@@ -151,6 +172,31 @@ impl<S, B> Service<ServiceRequest> for CheckAuthMiddleware<S>
             res.await.map(ServiceResponse::map_into_left_body)
         })
     }
+}
+
+async fn get_login_type(request: &HttpRequest) -> Result<LoginType> {
+    let config = match request.app_data::<Data<Config>>() {
+        Some(c) => c,
+        None => bail!("config not found"),
+    };
+    let cache = match request.app_data::<Data<AuthCache>>() {
+        Some(c) => c,
+        None => bail!("auth cache not found"),
+    };
+    let session = request.get_session();
+    let host = format!("{}://{}", request.connection_info().scheme(), request.connection_info().host());
+    let login_type = auth_backend::new(config).get_login_type(&host, cache)?;
+
+    match &login_type {
+        Redirect { to_session, .. } => {
+            session.insert_keys(to_session)?
+        }
+        _ => {}
+    }
+
+    Ok(
+        login_type
+    )
 }
 
 

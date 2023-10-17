@@ -1,7 +1,6 @@
 use std::any::Any;
 use std::io::{Read, Write};
 
-use actix_session::Session;
 use actix_web::web::Form;
 use anyhow::Result;
 
@@ -22,9 +21,10 @@ pub trait DbBackend {
     fn get_key_read(&self) -> Option<Result<Box<dyn Read + '_>>>;
     fn get_db_write(&mut self) -> Result<Box<dyn Write + '_>>;
     fn as_any(&mut self) -> &mut dyn Any;
+    fn validate_config(&self) -> Result<()> { Ok(()) }
 }
 
-pub fn new(config: &Config, _: &Session) -> Box<dyn DbBackend> {
+pub fn new(config: &Config) -> Box<dyn DbBackend> {
     match config.db_backend {
         backend::DbBackend::Test => Box::new(Test::new()),
         backend::DbBackend::Filesystem => Box::new(Filesystem::new(config)),

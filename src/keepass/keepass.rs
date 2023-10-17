@@ -332,7 +332,7 @@ mod tests {
         let mut config = Config::default();
         config.db_backend = DbBackend::Test;
 
-        let mut db_backend = db_backend::new(&config, &session);
+        let mut db_backend = db_backend::new(&config);
         let test_backend: &mut Test = db_backend.as_any().downcast_mut().unwrap();
         test_backend.buf.extend_from_slice(&fs::read("tests/test.kdbx").unwrap());
 

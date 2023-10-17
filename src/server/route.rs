@@ -2,14 +2,7 @@ use actix_files as fs;
 use actix_files::NamedFile;
 use actix_web::{get, Responder, web};
 
-use crate::server::route::auth::{
-    authenticated,
-    backend_login,
-    close_db,
-    db_login,
-    logout,
-    user_login,
-};
+use crate::server::route::auth::{authenticated, backend_login, close_db, db_login, logout, callback_user_auth, user_login};
 use crate::server::route::keepass::{
     get_entry,
     get_file,

@@ -4,3 +4,4 @@ pub mod filesystem;
 pub mod backend;
 pub mod key;
 pub mod search;
+pub mod oidc;

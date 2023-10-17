@@ -6,11 +6,13 @@ use actix_web::cookie;
 use anyhow::Result;
 use serde::Deserialize;
 use serde_yaml::from_reader;
+use crate::{auth_backend, db_backend};
 
 use crate::config::backend::{AuthBackend, DbBackend};
 use crate::config::filesystem::Filesystem;
 use crate::config::key::Key;
 use crate::config::ldap::Ldap;
+use crate::config::oidc::Oidc;
 use crate::config::search::Search;
 
 #[derive(Clone, Deserialize)]
@@ -29,6 +31,8 @@ pub struct Config {
     pub search: Search,
     #[serde(alias = "LDAP", alias = "Ldap")]
     pub ldap: Ldap,
+    #[serde(alias = "OIDC", alias = "Oidc")]
+    pub oidc: Oidc,
     #[serde(alias = "Filesystem")]
     pub filesystem: Filesystem,
 }
@@ -47,6 +51,7 @@ impl Default for Config {
             session_secret_key: Key(cookie::Key::generate()),
             search: Default::default(),
             ldap: Default::default(),
+            oidc: Default::default(),
             filesystem: Default::default(),
         }
     }
@@ -57,11 +62,9 @@ impl Config {
         let file = File::open(filename)?;
         let conf: Config = from_reader(file)?;
 
-        conf.validate()?;
+        auth_backend::new(&conf ).validate_config()?;
+        db_backend::new(&conf).validate_config()?;
 
         Ok(conf)
-    }
-    pub fn validate(&self) -> Result<()> {
-        self.filesystem.validate()
     }
 }

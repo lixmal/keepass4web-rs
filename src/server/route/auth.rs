@@ -1,11 +1,12 @@
 use actix_session::Session;
-use actix_web::{get, HttpResponse, post, Responder, web};
-use actix_web::web::Data;
+use actix_web::{get, HttpRequest, HttpResponse, post, Responder, web};
+use actix_web::web::{Data, Redirect};
 use log::{error, info};
 use serde_json::json;
 
 use crate::{auth_backend, db_backend};
 use crate::auth::{BackendLogin, DbLogin, gen_token, SESSION_KEY_CSRF, SESSION_KEY_USER, UserLogin};
+use crate::auth_backend::AuthCache;
 use crate::config::config::Config;
 use crate::keepass::db_cache::DbCache;
 use crate::keepass::keepass::KeePass;
@@ -16,7 +17,7 @@ const CSRF_TOKEN_LENGTH: usize = 32;
 
 #[get("/authenticated")]
 async fn authenticated(session: Session, config: Data<Config>, db_cache: Data<DbCache>) -> impl Responder {
-    let backend = db_backend::new(&config, &session).authenticated();
+    let backend = db_backend::new(&config).authenticated();
 
     let db = match db_is_open(&session, &config, &db_cache).await {
         Ok(v) => v,
@@ -122,7 +123,7 @@ async fn user_login(session: Session, config: Data<Config>, params: web::Form<Us
 async fn backend_login(session: Session, config: Data<Config>, params: web::Form<BackendLogin>) -> impl Responder {
     let username = session.get_username();
 
-    let db_backend = db_backend::new(&config, &session);
+    let db_backend = db_backend::new(&config);
     if db_backend.authenticated() {
         return HttpResponse::BadRequest().json(json!(
             {
@@ -169,7 +170,7 @@ async fn db_login(session: Session, config: Data<Config>, db_cache: Data<DbCache
         ));
     }
 
-    let db_backend = db_backend::new(&config, &session);
+    let db_backend = db_backend::new(&config);
     let db = match KeePass::from_backend(&config, db_backend.as_ref(), &params) {
         Ok(v) => v,
         Err(err) => {

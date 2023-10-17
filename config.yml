@@ -7,7 +7,7 @@
 db_backend: 'Filesystem'
 
 # backend to authenticate users before anything else
-# available: None, LDAP
+# available: None, LDAP, OIDC
 # None is only useful in single-user environments
 auth_backend: 'Test'
 
@@ -43,6 +43,14 @@ LDAP:
     # key file location attribute
     keyfile_attribute:  'keePassKeyFile'
 
+# open id connect specific configuration, auth_backend = 'OIDC'
+OIDC:
+    # url to the issuer (discovery url)
+    issuer: ''
+    client_id: ''
+    client_secret: ''
+    scopes:
+      - 'profile'
 
 # time till database gets closed (user idle time)
 # user will have to reenter database password/keyfile

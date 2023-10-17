@@ -50,6 +50,10 @@ impl DbBackend for Filesystem {
     fn as_any(&mut self) -> &mut dyn Any {
         self
     }
+
+    fn validate_config(&self) -> Result<()> {
+        self.config.validate()
+    }
 }
 
 impl Filesystem {
