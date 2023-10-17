@@ -20,6 +20,7 @@ pub mod oidc;
 pub type AuthCache = Vec<u8>;
 
 pub struct UserInfo {
+    pub id: String,
     pub name: String,
 }
 

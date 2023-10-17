@@ -64,9 +64,15 @@ impl AuthBackend for Ldap {
         )?.success()?;
         ldap.unbind()?;
 
-        let cn = user.attrs.get(CN_ATTR).ok_or(anyhow!("CN attribute not found"))?;
-        Ok(UserInfo {
-            name: cn[0].clone(),
-        })
+        let cn = user.attrs.get(CN_ATTR)
+            .ok_or(anyhow!("CN attribute not found"))?;
+        let id = user.attrs.get(&self.config.login_attribute)
+            .ok_or(anyhow!("login attribute '{}' not found", &self.config.login_attribute))?;
+        Ok(
+            UserInfo {
+                id: id[0].to_lowercase(),
+                name: cn[0].clone(),
+            }
+        )
     }
 }

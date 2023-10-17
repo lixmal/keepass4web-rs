@@ -13,9 +13,12 @@ impl AuthBackend for Test {
 
     fn login(&self, username: &str, password: &str) -> Result<UserInfo> {
         if username == "test" && password == "test" {
-            return Ok(UserInfo {
-                name: username.to_string(),
-            });
+            return Ok(
+                UserInfo {
+                    id: username.to_string(),
+                    name: username.to_string(),
+                }
+            );
         }
 
         bail!("username or password incorrect");

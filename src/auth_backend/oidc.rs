@@ -161,9 +161,16 @@ impl AuthBackend for Oidc {
             bail!("access token hash is missing");
         }
 
+        let id = claims.subject().as_str().to_owned();
+        let name = match claims.preferred_username() {
+            None => id.clone(),
+            Some(n) => n.as_str().to_owned(),
+        };
+
         Ok(
             UserInfo {
-                name: claims.subject().as_str().to_owned(),
+                id,
+                name,
             }
         )
     }

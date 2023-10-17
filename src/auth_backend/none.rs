@@ -12,6 +12,11 @@ impl AuthBackend for None {
     }
 
     fn login(&self, _: &str, _: &str) -> Result<UserInfo> {
-        Ok(UserInfo { name: "---".to_string() })
+        Ok(
+            UserInfo {
+                id: "".to_string(),
+                name: "---".to_string(),
+            }
+        )
     }
 }

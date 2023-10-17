@@ -79,7 +79,8 @@ async fn user_login(session: Session, config: Data<Config>, params: web::Form<Us
         }
     };
 
-    if let Err(err) = session.insert(SESSION_KEY_USER, user_info.name.as_str()) {
+    if let Err(err) = session.insert(SESSION_KEY_USER, user_info.id.as_str()) {
+        session.destroy();
         error!("user login from '{}': {}", params.username, err);
         return HttpResponse::InternalServerError().json(json!(
             {
