@@ -93,7 +93,9 @@ type OidcClient = Client<
 #[derive(Deserialize)]
 struct OidcParams {
     state: String,
-    session_state: String,
+    session_state: Option<String>,
+    error: Option<String>,
+    error_description: Option<String>,
     code: String,
 }
 
@@ -191,6 +193,14 @@ impl AuthBackend for Oidc {
 
     async fn callback(&self, mut from_session: HashMap<String, String>, cache: &AuthCache, params: serde_json::Value, host: &str) -> Result<UserInfo> {
         let oidc_params: OidcParams = serde_json::from_value(params)?;
+
+        if let Some(err) = oidc_params.error {
+            if let Some(err_desc) = oidc_params.error_description {
+                bail!("error from auth server: {}: {}", err, err_desc)
+            } else {
+                bail!("error from auth server: {}", err)
+            }
+        }
 
         let state = from_session.remove(SESSION_KEY_OIDC_STATE).ok_or(anyhow!("failed to get csrf token from session"))?;
         if !constant_time_eq(oidc_params.state.as_bytes(), state.as_bytes()) {
