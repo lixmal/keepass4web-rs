@@ -1,5 +1,4 @@
 use std::any::Any;
-use std::collections::HashMap;
 
 use anyhow::{bail, Result};
 use async_trait::async_trait;
@@ -18,6 +17,8 @@ pub mod ldap;
 pub mod none;
 pub mod oidc;
 
+pub const SESSION_KEY_AUTH_STATE: &str = "auth_state";
+
 pub type AuthCache = Box<dyn Any + Send + Sync>;
 
 pub struct UserInfo {
@@ -35,7 +36,7 @@ pub enum LoginType {
     Redirect {
         url: Url,
         #[serde(skip)]
-        to_session: HashMap<String, String>,
+        state: String,
     },
 }
 
@@ -47,14 +48,12 @@ pub trait AuthBackend: Send + Sync {
 
     fn get_login_type(&self, host: &str, cache: &AuthCache) -> Result<LoginType>;
 
-    fn get_session_keys(&self, _cache: &AuthCache) -> Result<Vec<String>> { Ok(vec![]) }
-
     //  TODO: handle case sensitivity
     fn login(&self, _username: &str, _password: &str) -> Result<UserInfo> {
         bail!("login method not supported")
     }
 
-    async fn callback(&self, _from_session: HashMap<String, String>, _cache: &AuthCache, _params: serde_json::Value, _host: &str) -> Result<UserInfo> {
+    async fn callback(&self, _from_session: String, _cache: &AuthCache, _params: serde_json::Value, _host: &str) -> Result<UserInfo> {
         bail!("login method not supported")
     }
 }

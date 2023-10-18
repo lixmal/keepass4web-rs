@@ -14,7 +14,7 @@ use serde_json::json;
 use zeroize::ZeroizeOnDrop;
 
 use crate::auth_backend;
-use crate::auth_backend::{AuthCache, LoginType};
+use crate::auth_backend::{AuthCache, LoginType, SESSION_KEY_AUTH_STATE};
 use crate::auth_backend::LoginType::Redirect;
 use crate::config::config::Config;
 use crate::server::route::STATIC_DIR;
@@ -188,8 +188,8 @@ async fn get_login_type(request: &HttpRequest) -> Result<LoginType> {
     let login_type = auth_backend::new(config).get_login_type(&host, cache)?;
 
     match &login_type {
-        Redirect { to_session, .. } => {
-            session.insert_keys(to_session)?
+        Redirect { state, .. } => {
+            session.insert(SESSION_KEY_AUTH_STATE, state)?;
         }
         _ => {}
     }

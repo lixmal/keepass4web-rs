@@ -1,4 +1,3 @@
-use std::collections::HashMap;
 use std::string::ToString;
 
 use anyhow::{anyhow, bail, Result};
@@ -50,14 +49,17 @@ use crate::auth_backend::{AuthBackend, AuthCache, LoginType, UserInfo};
 use crate::config::config::Config;
 use crate::config::oidc;
 
-const SESSION_KEY_OIDC_STATE: &str = "oidc_state";
-const SESSION_KEY_OIDC_NONCE: &str = "oidc_nonce";
-const SESSION_KEY_OIDC_PKCE: &str = "oidc_pkce";
-
 #[derive(Clone, Debug, Default, Deserialize, PartialEq, Serialize)]
 struct KeePassClaims {
     database_location: Option<String>,
     keyfile_location: Option<String>,
+}
+
+#[derive(Deserialize, Serialize)]
+struct State {
+    state: String,
+    nonce: String,
+    pkce: String,
 }
 
 impl AdditionalClaims for KeePassClaims {}
@@ -167,32 +169,23 @@ impl AuthBackend for Oidc {
 
         let (auth_url, state, nonce) = req.url();
 
-        let to_session = HashMap::from([
-            (SESSION_KEY_OIDC_STATE.to_string(), state.secret().to_owned()),
-            (SESSION_KEY_OIDC_NONCE.to_string(), nonce.secret().to_owned()),
-            (SESSION_KEY_OIDC_PKCE.to_string(), pkce_verifier.secret().to_owned()),
-        ]);
+        let state = State {
+            state: state.secret().to_owned(),
+            nonce: nonce.secret().to_owned(),
+            pkce: pkce_verifier.secret().to_owned(),
+        };
 
         Ok(
             LoginType::Redirect {
                 url: auth_url,
-                to_session,
+                state: serde_json::to_string(&state)?,
             }
         )
     }
 
-    fn get_session_keys(&self, _: &AuthCache) -> Result<Vec<String>> {
-        Ok(
-            vec![
-                SESSION_KEY_OIDC_STATE.to_string(),
-                SESSION_KEY_OIDC_NONCE.to_string(),
-                SESSION_KEY_OIDC_PKCE.to_string(),
-            ]
-        )
-    }
 
-    async fn callback(&self, mut from_session: HashMap<String, String>, cache: &AuthCache, params: serde_json::Value, host: &str) -> Result<UserInfo> {
-        let oidc_params: OidcParams = serde_json::from_value(params)?;
+    async fn callback(&self, from_session: String, _cache: &AuthCache, _params: serde_json::Value, _host: &str) -> Result<UserInfo> {
+        let oidc_params: OidcParams = serde_json::from_value(_params)?;
 
         if let Some(err) = oidc_params.error {
             if let Some(err_desc) = oidc_params.error_description {
@@ -202,16 +195,15 @@ impl AuthBackend for Oidc {
             }
         }
 
-        let state = from_session.remove(SESSION_KEY_OIDC_STATE).ok_or(anyhow!("failed to get csrf token from session"))?;
-        if !constant_time_eq(oidc_params.state.as_bytes(), state.as_bytes()) {
+        let state: State = serde_json::from_str(&from_session)?;
+        if !constant_time_eq(oidc_params.state.as_bytes(), state.state.as_bytes()) {
             bail!("invalid csrf token (state)");
         }
 
-        let client = self.get_client(host, cache)?;
-        let pkce_verifier = from_session.remove(SESSION_KEY_OIDC_PKCE).ok_or(anyhow!("failed to get pkce from session"))?;
+        let client = self.get_client(_host, _cache)?;
         let token_response = client
             .exchange_code(AuthorizationCode::new(oidc_params.code))
-            .set_pkce_verifier(PkceCodeVerifier::new(pkce_verifier))
+            .set_pkce_verifier(PkceCodeVerifier::new(state.pkce))
             .request_async(async_http_client)
             .await?;
 
@@ -219,8 +211,7 @@ impl AuthBackend for Oidc {
             .id_token()
             .ok_or(anyhow!("server did not return an ID token"))?;
 
-        let nonce = from_session.remove(SESSION_KEY_OIDC_NONCE).ok_or(anyhow!("failed to get nonce from session"))?;
-        let claims = id_token.claims(&client.id_token_verifier(), &Nonce::new(nonce))?;
+        let claims = id_token.claims(&client.id_token_verifier(), &Nonce::new(state.nonce))?;
 
         if let Some(expected_access_token_hash) = claims.access_token_hash() {
             let actual_access_token_hash = AccessTokenHash::from_token(
