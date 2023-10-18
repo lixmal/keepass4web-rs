@@ -32,7 +32,6 @@ use openidconnect::core::{
     CoreErrorResponseType,
     CoreGenderClaim,
     CoreJsonWebKey,
-    CoreJsonWebKeySet,
     CoreJsonWebKeyType,
     CoreJsonWebKeyUse,
     CoreJweContentEncryptionAlgorithm,
@@ -102,12 +101,6 @@ pub struct Oidc {
     pub(crate) config: oidc::Oidc,
 }
 
-#[derive(Serialize, Deserialize)]
-struct Metadata {
-    provider: Vec<u8>,
-    jwks: Vec<u8>,
-}
-
 impl Oidc {
     pub fn new(config: &Config) -> Self {
         Self {
@@ -116,10 +109,10 @@ impl Oidc {
     }
 
     fn get_client(&self, host: &str, cache: &AuthCache) -> Result<OidcClient> {
-        let metadata: Metadata = serde_json::from_slice(cache)?;
-        let jwks: CoreJsonWebKeySet = serde_json::from_slice(&metadata.jwks)?;
-        let mut provider_metadata: CoreProviderMetadata = serde_json::from_slice(&metadata.provider)?;
-        provider_metadata = provider_metadata.set_jwks(jwks);
+        let provider_metadata = match cache.downcast_ref::<CoreProviderMetadata>() {
+            Some(v) => v,
+            None => bail!("failed to retrieve provider metadata from cache"),
+        };
 
         let client: OidcClient = Client::new(
             ClientId::new(self.config.client_id.clone()),
@@ -145,20 +138,13 @@ impl AuthBackend for Oidc {
     }
 
     async fn init(&self) -> Result<AuthCache> {
-        let provider_metadata = CoreProviderMetadata::discover_async(
-            IssuerUrl::from_url(self.config.issuer.clone().unwrap()),
-            async_http_client,
-        ).await?;
-
-        let provider = serde_json::to_vec(&provider_metadata)?;
-        // jwks is skipped in serialization, so we have to serialize it separately
-        let jwks = serde_json::to_vec(provider_metadata.jwks())?;
-
         Ok(
-            serde_json::to_vec(&Metadata {
-                provider,
-                jwks,
-            })?
+            Box::new(
+                CoreProviderMetadata::discover_async(
+                    IssuerUrl::from_url(self.config.issuer.clone().unwrap()),
+                    async_http_client,
+                ).await?
+            )
         )
     }
 

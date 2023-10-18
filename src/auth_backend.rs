@@ -1,3 +1,4 @@
+use std::any::Any;
 use std::collections::HashMap;
 
 use anyhow::{bail, Result};
@@ -17,7 +18,7 @@ pub mod ldap;
 pub mod none;
 pub mod oidc;
 
-pub type AuthCache = Vec<u8>;
+pub type AuthCache = Box<dyn Any + Send + Sync>;
 
 pub struct UserInfo {
     pub id: String,
@@ -42,7 +43,7 @@ pub enum LoginType {
 pub trait AuthBackend: Send + Sync {
     fn validate_config(&self) -> Result<()> { Ok(()) }
 
-    async fn init(&self) -> Result<AuthCache> { Ok(vec![]) }
+    async fn init(&self) -> Result<AuthCache> { Ok(Box::new(())) }
 
     fn get_login_type(&self, host: &str, cache: &AuthCache) -> Result<LoginType>;
 
