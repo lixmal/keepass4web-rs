@@ -29,8 +29,8 @@ pub struct Ldap {
     pub login_attribute: String,
     pub bind: String,
     pub password: String,
-    pub database_attribute: String,
-    pub keyfile_attribute: String,
+    pub database_attribute: Option<String>,
+    pub keyfile_attribute: Option<String>,
 }
 
 impl Default for Ldap {
@@ -43,8 +43,8 @@ impl Default for Ldap {
             login_attribute: "uid".to_string(),
             bind: "".to_string(),
             password: "".to_string(),
-            database_attribute: "keePass".to_string(),
-            keyfile_attribute: "keePassKeyFile".to_string(),
+            database_attribute: None,
+            keyfile_attribute: None,
         }
     }
 }

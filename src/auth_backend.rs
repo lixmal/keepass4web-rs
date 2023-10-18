@@ -22,6 +22,8 @@ pub type AuthCache = Vec<u8>;
 pub struct UserInfo {
     pub id: String,
     pub name: String,
+    pub db_location: Option<String>,
+    pub keyfile_location: Option<String>,
 }
 
 #[derive(Clone, Serialize)]

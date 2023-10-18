@@ -17,6 +17,8 @@ impl AuthBackend for Test {
                 UserInfo {
                     id: username.to_string(),
                     name: username.to_string(),
+                    db_location: None,
+                    keyfile_location: None,
                 }
             );
         }

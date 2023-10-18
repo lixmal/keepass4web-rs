@@ -37,11 +37,10 @@ LDAP:
     bind:     'CN=ldap-read,OU=Special Users,DC=example,DC=org'
     password: ''
 
-    # ldap attribute containing the keepass database or keyfile (per user), dependent on db backend
-    # leave empty to use static db_location from above
-    database_attribute: 'keePass'
-    # key file location attribute
-    keyfile_attribute:  'keePassKeyFile'
+    # ldap attribute containing the keepass database and/or keyfile location for the authed user
+    # leave commented out to use static db/keyfile location from db backend
+    # database_attribute: 'keePass'
+    # keyfile_attribute:  'keePassKeyFile'
 
 # open id connect specific configuration, auth_backend = 'OIDC'
 OIDC:
@@ -50,7 +49,11 @@ OIDC:
     client_id: ''
     client_secret: ''
     scopes:
+      - 'openid'
       - 'profile'
+      # scope containing the keepass_location and/or keyfile_location claims for the authed user
+      # leave commented out to use static db/keyfile location from db backend
+      # - 'keepass'
 
 # time till database gets closed (user idle time)
 # user will have to reenter database password/keyfile

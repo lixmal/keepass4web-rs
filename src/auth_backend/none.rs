@@ -16,6 +16,8 @@ impl AuthBackend for None {
             UserInfo {
                 id: "".to_string(),
                 name: "---".to_string(),
+                db_location: Option::None,
+                keyfile_location: Option::None,
             }
         )
     }

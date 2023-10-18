@@ -34,21 +34,25 @@ impl AuthBackend for Ldap {
             self.config.password.as_str(),
         )?;
 
+        let mut attrs = vec![CN_ATTR];
+        if let Some(k) = &self.config.database_attribute {
+            attrs.push(k);
+        }
+        if let Some(k) = &self.config.keyfile_attribute {
+            attrs.push(k);
+        }
+
         // find user dn
         let (results, _res) = ldap.search(
             self.config.base_dn.as_str(),
             self.config.scope.clone().into(),
             format!(
                 "(&({}={}){})",
-                ldap_escape(self.config.login_attribute.clone()),
+                ldap_escape(&self.config.login_attribute),
                 ldap_escape(username),
                 self.config.filter
             ).as_str(),
-            vec![
-                CN_ATTR,
-                &self.config.keyfile_attribute,
-                &self.config.database_attribute,
-            ],
+            attrs,
         )?.success()?;
         ldap.unbind()?;
 
@@ -68,10 +72,26 @@ impl AuthBackend for Ldap {
             .ok_or(anyhow!("CN attribute not found"))?;
         let id = user.attrs.get(&self.config.login_attribute)
             .ok_or(anyhow!("login attribute '{}' not found", &self.config.login_attribute))?;
+
+        let mut db_location = None;
+        let mut keyfile_location = None;
+        if let Some(key) = &self.config.database_attribute {
+            if let Some(v) = user.attrs.get(key) {
+                db_location = Some(v[0].clone());
+            }
+        }
+        if let Some(key) = &self.config.keyfile_attribute {
+            if let Some(v) = user.attrs.get(key) {
+                keyfile_location = Some(v[0].clone());
+            }
+        }
+
         Ok(
             UserInfo {
                 id: id[0].to_lowercase(),
                 name: cn[0].clone(),
+                db_location,
+                keyfile_location,
             }
         )
     }

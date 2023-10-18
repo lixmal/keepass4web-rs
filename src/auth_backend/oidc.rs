@@ -4,8 +4,45 @@ use std::string::ToString;
 use anyhow::{anyhow, bail, Result};
 use async_trait::async_trait;
 use constant_time_eq::constant_time_eq;
-use openidconnect::{AccessTokenHash, AuthorizationCode, ClientId, ClientSecret, CsrfToken, IssuerUrl, Nonce, OAuth2TokenResponse, PkceCodeChallenge, PkceCodeVerifier, RedirectUrl, Scope, TokenResponse};
-use openidconnect::core::{CoreAuthenticationFlow, CoreClient, CoreJsonWebKeySet, CoreProviderMetadata};
+use openidconnect::{
+    AccessTokenHash,
+    AdditionalClaims,
+    AuthorizationCode,
+    Client,
+    ClientId,
+    ClientSecret,
+    CsrfToken,
+    EmptyExtraTokenFields,
+    IdTokenFields,
+    IssuerUrl,
+    Nonce,
+    OAuth2TokenResponse,
+    PkceCodeChallenge,
+    PkceCodeVerifier,
+    RedirectUrl,
+    Scope,
+    StandardErrorResponse,
+    StandardTokenResponse,
+    TokenResponse,
+};
+use openidconnect::core::{
+    CoreAuthDisplay,
+    CoreAuthenticationFlow,
+    CoreAuthPrompt,
+    CoreErrorResponseType,
+    CoreGenderClaim,
+    CoreJsonWebKey,
+    CoreJsonWebKeySet,
+    CoreJsonWebKeyType,
+    CoreJsonWebKeyUse,
+    CoreJweContentEncryptionAlgorithm,
+    CoreJwsSigningAlgorithm,
+    CoreProviderMetadata,
+    CoreRevocableToken,
+    CoreRevocationErrorResponse,
+    CoreTokenIntrospectionResponse,
+    CoreTokenType,
+};
 use openidconnect::reqwest::async_http_client;
 use serde::{Deserialize, Serialize};
 
@@ -17,6 +54,42 @@ use crate::config::oidc;
 const SESSION_KEY_OIDC_STATE: &str = "oidc_state";
 const SESSION_KEY_OIDC_NONCE: &str = "oidc_nonce";
 const SESSION_KEY_OIDC_PKCE: &str = "oidc_pkce";
+
+#[derive(Clone, Debug, Default, Deserialize, PartialEq, Serialize)]
+struct KeePassClaims {
+    database_location: Option<String>,
+    keyfile_location: Option<String>,
+}
+
+impl AdditionalClaims for KeePassClaims {}
+
+type OidcClient = Client<
+    KeePassClaims,
+    CoreAuthDisplay,
+    CoreGenderClaim,
+    CoreJweContentEncryptionAlgorithm,
+    CoreJwsSigningAlgorithm,
+    CoreJsonWebKeyType,
+    CoreJsonWebKeyUse,
+    CoreJsonWebKey,
+    CoreAuthPrompt,
+    StandardErrorResponse<CoreErrorResponseType>,
+    StandardTokenResponse<
+        IdTokenFields<
+            KeePassClaims,
+            EmptyExtraTokenFields,
+            CoreGenderClaim,
+            CoreJweContentEncryptionAlgorithm,
+            CoreJwsSigningAlgorithm,
+            CoreJsonWebKeyType
+        >,
+        CoreTokenType
+    >,
+    CoreTokenType,
+    CoreTokenIntrospectionResponse,
+    CoreRevocableToken,
+    CoreRevocationErrorResponse,
+>;
 
 #[derive(Deserialize)]
 struct OidcParams {
@@ -42,22 +115,26 @@ impl Oidc {
         }
     }
 
-    fn get_client(&self, host: &str, cache: &AuthCache) -> Result<CoreClient> {
+    fn get_client(&self, host: &str, cache: &AuthCache) -> Result<OidcClient> {
         let metadata: Metadata = serde_json::from_slice(cache)?;
-        let jwks: CoreJsonWebKeySet  = serde_json::from_slice(&metadata.jwks)?;
+        let jwks: CoreJsonWebKeySet = serde_json::from_slice(&metadata.jwks)?;
         let mut provider_metadata: CoreProviderMetadata = serde_json::from_slice(&metadata.provider)?;
         provider_metadata = provider_metadata.set_jwks(jwks);
-        Ok(
-            CoreClient::from_provider_metadata(
-                provider_metadata,
-                ClientId::new(self.config.client_id.clone()),
-                Some(ClientSecret::new(self.config.client_secret.clone())),
-            ).set_redirect_uri(
-                RedirectUrl::new(
-                    format!("{}{}", host, ROUTE_CALLBACK_USER_AUTH).to_string()
-                )?
-            )
-        )
+
+        let client: OidcClient = Client::new(
+            ClientId::new(self.config.client_id.clone()),
+            Some(ClientSecret::new(self.config.client_secret.clone())),
+            provider_metadata.issuer().clone(),
+            provider_metadata.authorization_endpoint().clone(),
+            provider_metadata.token_endpoint().cloned(),
+            provider_metadata.userinfo_endpoint().cloned(),
+            provider_metadata.jwks().to_owned(),
+        ).set_redirect_uri(
+            RedirectUrl::new(
+                format!("{}{}", host, ROUTE_CALLBACK_USER_AUTH).to_string()
+            )?
+        );
+        Ok(client)
     }
 }
 
@@ -171,6 +248,8 @@ impl AuthBackend for Oidc {
             UserInfo {
                 id,
                 name,
+                db_location: claims.additional_claims().database_location.clone(),
+                keyfile_location: claims.additional_claims().keyfile_location.clone(),
             }
         )
     }
