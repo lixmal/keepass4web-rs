@@ -49,7 +49,6 @@ OIDC:
     client_id: ''
     client_secret: ''
     scopes:
-      - 'openid'
       - 'profile'
       # scope containing the keepass_location and/or keyfile_location claims for the authed user
       # leave commented out to use static db/keyfile location from db backend
