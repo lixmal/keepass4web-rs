@@ -44,8 +44,7 @@ use openidconnect::core::{
 use openidconnect::reqwest::async_http_client;
 use serde::{Deserialize, Serialize};
 
-use crate::auth::ROUTE_CALLBACK_USER_AUTH;
-use crate::auth_backend::{AuthBackend, AuthCache, LoginType, UserInfo};
+use crate::auth_backend::{AuthBackend, AuthCache, LoginType, ROUTE_CALLBACK_USER_AUTH, UserInfo};
 use crate::config::config::Config;
 use crate::config::oidc;
 

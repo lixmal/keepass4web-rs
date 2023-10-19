@@ -17,7 +17,7 @@ use crate::auth_backend;
 use crate::auth_backend::{AuthCache, LoginType, SESSION_KEY_AUTH_STATE};
 use crate::auth_backend::LoginType::Redirect;
 use crate::config::config::Config;
-use crate::server::route::STATIC_DIR;
+use crate::server::route::API_PATH;
 use crate::session::AuthSession;
 
 pub(crate) const SESSION_KEY_USER: &str = "user";
@@ -27,10 +27,8 @@ pub(crate) const SESSION_USER_UNKNOWN: &str = "unknown";
 
 pub(crate) const CSRF_HEADER: &str = "X-CSRF-Token";
 
-pub(crate) const ROUTE_ROOT: &str = "/";
-pub(crate) const ROUTE_ICON: &str = "/icon";
 pub(crate) const ROUTE_USER_LOGIN: &str = "/user_login";
-pub(crate) const ROUTE_CALLBACK_USER_AUTH: &str = "/callback_user_auth";
+pub(crate) const ROUTE_ICON: &str = "/icon";
 
 
 #[derive(Deserialize, ZeroizeOnDrop)]
@@ -114,10 +112,8 @@ impl<S, B> Service<ServiceRequest> for CheckAuthMiddleware<S>
         // TODO: don't return unauthorized on session backend error, but the actual error
         // Saves the user from some weird redirects
         if !request.get_session().is_authorized() {
-            if request.path() != ROUTE_ROOT
-                && request.path() != ROUTE_USER_LOGIN
-                && request.path() != ROUTE_CALLBACK_USER_AUTH
-                && !request.path().starts_with(format!("{}/", STATIC_DIR).as_str())
+            if request.path().starts_with(format!("{}/", API_PATH).as_str())
+                && request.path() != format!("{}{}", API_PATH, ROUTE_USER_LOGIN).as_str()
             {
                 let (request, _) = request.into_parts();
                 return Box::pin(async {
@@ -148,11 +144,10 @@ impl<S, B> Service<ServiceRequest> for CheckAuthMiddleware<S>
                 });
             }
         }
-        // CSRF token is required for all routes from the moment user auth succeeds
+        // CSRF token is required for all api routes from the moment user auth succeeds
         // with the exception for dynamic icons, as these are fetched by the browser without csrf
-        else if request.path() != ROUTE_ROOT
-            && !request.path().starts_with(format!("{}/", ROUTE_ICON).as_str())
-            && !request.path().starts_with(format!("{}/", STATIC_DIR).as_str())
+        else if request.path().starts_with(format!("{}/", API_PATH).as_str())
+            && !request.path().starts_with(format!("{}{}/", API_PATH, ROUTE_ICON).as_str())
             && !csrf_matches(&request) {
             let (request, _) = request.into_parts();
 

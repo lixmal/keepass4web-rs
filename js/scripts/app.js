@@ -47,23 +47,19 @@ KeePass4Web.checkAuth = function (state, callback) {
                     window.location = template.url
                     throw 'Redirecting'
                 } else if (template.type === 'mask')
-                    this.props.history.replace({
-                        state: state,
-                        pathname: '/backend_login'
-                    })
+                    this.props.navigate('/user_login', state)
             } else if (!authData.db) {
-                this.props.history.replace({
-                    state: state,
-                    pathname: '/db_login'
-                })
+                this.props.navigate('/db_login', state)
             }
+
+            return false
         }.bind(this),
     })
 }
 
 // simple wrapper for ajax calls, in case implementation changes
 KeePass4Web.ajax = function (url, conf) {
-    conf.url = url
+    conf.url = `api/v1/${url}`
 
     // set defaults
     conf.method = typeof conf.method === 'undefined' ? 'POST' : conf.method

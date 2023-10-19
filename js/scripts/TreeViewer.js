@@ -24,7 +24,7 @@ class TreeViewer extends React.Component {
 
         var srcurl
         if (root.custom_icon_uuid) {
-            srcurl = 'icon/' + encodeURIComponent(root.custom_icon_uuid)
+            srcurl = 'api/v1/icon/' + encodeURIComponent(root.custom_icon_uuid)
         } else {
             srcurl = 'assets/img/icons/' + encodeURIComponent(root.icon || this.props.nodeIcon || '49') + '.png'
         }

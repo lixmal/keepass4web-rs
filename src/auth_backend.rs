@@ -18,6 +18,7 @@ pub mod none;
 pub mod oidc;
 
 pub const SESSION_KEY_AUTH_STATE: &str = "auth_state";
+pub const ROUTE_CALLBACK_USER_AUTH: &str = "/callback_user_auth";
 
 pub type AuthCache = Box<dyn Any + Send + Sync>;
 

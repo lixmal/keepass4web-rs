@@ -11,7 +11,7 @@ class GroupViewer extends React.Component {
 
     getIcon(element) {
         if (element.custom_icon_uuid)
-            return <img className="kp-icon" src={'icon/' + encodeURIComponent(element.custom_icon_uuid)}/>
+            return <img className="kp-icon" src={'api/v1/icon/' + encodeURIComponent(element.custom_icon_uuid)}/>
         else if (element.icon)
             return <img className="kp-icon" src={'assets/img/icons/' + encodeURIComponent(element.icon) + '.png'}/>
     }

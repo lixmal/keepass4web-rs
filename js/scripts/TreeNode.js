@@ -72,7 +72,7 @@ class TreeNode extends React.Component {
 
         let srcurl
         if (node.custom_icon_uuid) {
-            srcurl = 'icon/' + encodeURIComponent(node.custom_icon_uuid)
+            srcurl = 'api/v1/icon/' + encodeURIComponent(node.custom_icon_uuid)
         } else {
             srcurl = 'assets/img/icons/' + encodeURIComponent(node.icon || options.nodeIcon || '48') + '.png'
         }

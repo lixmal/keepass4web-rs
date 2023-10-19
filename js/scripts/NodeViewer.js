@@ -257,7 +257,7 @@ class NodeViewer extends React.Component {
 
         let icon = null
         if (entry.custom_icon_uuid)
-            icon = <img className="kp-icon" src={'icon/' + encodeURIComponent(entry.custom_icon_uuid)}/>
+            icon = <img className="kp-icon" src={'api/v1/icon/' + encodeURIComponent(entry.custom_icon_uuid)}/>
         else if (entry.icon)
             icon = <img className="kp-icon" src={'assets/img/icons/' + encodeURIComponent(entry.icon) + '.png'}/>
 
