@@ -3,10 +3,12 @@ import NodeViewer from './NodeViewer'
 import GroupViewer from './GroupViewer'
 import NavBar from './NavBar'
 import TreeViewer from './TreeViewer'
+import withNavigateHook from './nagivateHook'
 
-export default class Viewport extends React.Component {
-    constructor() {
-        super()
+
+class Viewport extends React.Component {
+    constructor(props) {
+        super(props)
         this.onGroupSelect = this.onGroupSelect.bind(this)
         this.onSelect = this.onSelect.bind(this)
         this.onSearch = this.onSearch.bind(this)
@@ -116,19 +118,23 @@ export default class Viewport extends React.Component {
     }
 
     componentDidMount() {
-        KeePass4Web.ajax('get_groups', {
-            method: "GET",
-            success: function (data) {
-                this.setState({
-                    tree: data.data.groups
-                })
-                if (data.data.last_selected)
-                    this.onGroupSelect({
-                        id: data.data.last_selected
+        let cb = function () {
+            KeePass4Web.ajax('get_groups', {
+                method: "GET",
+                success: function (data) {
+                    this.setState({
+                        tree: data.data.groups
                     })
-            }.bind(this),
-            error: KeePass4Web.error.bind(this)
-        })
+                    if (data.data.last_selected)
+                        this.onGroupSelect({
+                            id: data.data.last_selected
+                        })
+                }.bind(this),
+                error: KeePass4Web.error.bind(this),
+            })
+        }
+
+        KeePass4Web.checkAuth.call(this, {}, cb.bind(this))
     }
 
     componentWillUnmount() {
@@ -142,7 +148,6 @@ export default class Viewport extends React.Component {
                 <NavBar
                     showSearch
                     onSearch={this.onSearch}
-                    router={this.props.router}
                 />
                 <div className="row">
                     <div className="col-sm-2 dir-tree">
@@ -172,4 +177,4 @@ export default class Viewport extends React.Component {
     }
 }
 
-
+export default withNavigateHook(Viewport)

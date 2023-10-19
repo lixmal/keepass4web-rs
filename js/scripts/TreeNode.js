@@ -1,6 +1,8 @@
 import React from 'react'
+import withNavigateHook from './nagivateHook'
 
-export default class TreeNode extends React.Component {
+
+class TreeNode extends React.Component {
     constructor(props) {
         super(props)
 
@@ -110,3 +112,5 @@ export default class TreeNode extends React.Component {
         )
     }
 }
+
+export default withNavigateHook(TreeNode)

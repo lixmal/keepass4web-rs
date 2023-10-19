@@ -2,7 +2,7 @@ import React from 'react'
 
 export default class Timer extends React.Component {
     constructor(props) {
-        super()
+        super(props)
         this.state = {
             text: '',
             endTime: this.endTime(props.timeout)
@@ -77,9 +77,9 @@ export default class Timer extends React.Component {
         var theTime = end.getTime() - Date.now()
         return theTime >= 0 ? {
             d: Math.floor(theTime / (1000 * 60 * 60 * 24)),
-                h: Math.floor(theTime / (1000 * 60 * 60) % 24),
-                m: Math.floor(theTime / (1000 * 60) % 60),
-                s: Math.floor(theTime / 1000 % 60)
+            h: Math.floor(theTime / (1000 * 60 * 60) % 24),
+            m: Math.floor(theTime / (1000 * 60) % 60),
+            s: Math.floor(theTime / 1000 % 60)
         } : false
     }
 

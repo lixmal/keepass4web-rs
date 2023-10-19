@@ -1,7 +1,10 @@
 import React from 'react'
 import Classnames from 'classnames'
 
-export default class GroupViewer extends React.Component {
+import withNavigateHook from './nagivateHook'
+
+
+class GroupViewer extends React.Component {
     constructor(props) {
         super(props)
     }
@@ -14,7 +17,7 @@ export default class GroupViewer extends React.Component {
     }
 
     render() {
-        var classes = Classnames({
+        const classes = Classnames({
             'panel': true,
             'panel-default': true,
             'loading-mask': this.props.mask,
@@ -22,9 +25,9 @@ export default class GroupViewer extends React.Component {
 
         if (!this.props.group) return (<div className={classes}></div>)
 
-        var group = this.props.group
+        const group = this.props.group
 
-        var entries = []
+        let entries = []
         for (var i in group.entries) {
             let entry = group.entries[i]
 
@@ -69,3 +72,4 @@ export default class GroupViewer extends React.Component {
     }
 }
 
+export default withNavigateHook(GroupViewer)

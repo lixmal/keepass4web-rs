@@ -1,7 +1,10 @@
 import React from 'react'
 import TreeNode from './TreeNode'
 
-export default class TreeViewer extends React.Component {
+import withNavigateHook from './nagivateHook'
+
+
+class TreeViewer extends React.Component {
     render() {
         var root = this.props.tree || {}
         var tree = root.children
@@ -48,3 +51,4 @@ export default class TreeViewer extends React.Component {
 }
 
 
+export default withNavigateHook(TreeViewer)

@@ -1,9 +1,10 @@
 import React from 'react'
 import Classnames from 'classnames'
 
+
 export default class LoginForm extends React.Component {
-    constructor() {
-        super()
+    constructor(props) {
+        super(props)
         this.handleLogin = this.handleLogin.bind(this)
         this.abortRequests = this.abortRequests.bind(this)
         this.state = {
@@ -13,8 +14,8 @@ export default class LoginForm extends React.Component {
     }
 
     transformRefs(tRefs) {
-        var refs = {}
-        for (var property in tRefs) {
+        let refs = {}
+        for (let property in tRefs) {
             if (tRefs.hasOwnProperty(property)) {
                 refs[property] = tRefs[property].value
             }
@@ -36,6 +37,9 @@ export default class LoginForm extends React.Component {
 
         if (this.authRequest)
             this.authRequest.abort()
+    }
+
+    routerWillLeave() {
     }
 
     handleLogin(event) {
@@ -74,15 +78,14 @@ export default class LoginForm extends React.Component {
             complete: function () {
                 this.serverRequest = null
 
-                var router = this.props.router
-                router.setRouteLeaveHook(router.getCurrentLocation(), function () {
+                this.routerWillLeave = function () {
                     this.setState({
                         mask: false
                     })
-                })
+                }
                 // even on fail this will redirect to root and check which authentication is required
                 // in case some previous auth expired while the user took too much time
-                this.props.router.replace('/')
+                this.props.navigate('/', {replace: true})
             }.bind(this)
         })
 
@@ -94,9 +97,7 @@ export default class LoginForm extends React.Component {
             // don't interfere with ongoing login process
             if (this.serverRequest) return
 
-            this.authRequest = KeePass4Web.checkAuth({
-                location: this.props.location
-            }, this.props.router.replace)
+            this.authRequest = KeePass4Web.checkAuth(this.props.location.state)
         }.bind(this), 1000 * (KeePass4Web.getSettings().interval || 10 * 60))
     }
 
@@ -107,3 +108,4 @@ export default class LoginForm extends React.Component {
         this.abortRequests()
     }
 }
+

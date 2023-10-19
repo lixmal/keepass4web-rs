@@ -1,8 +1,8 @@
 import React from 'react'
 
 export default class Alert extends React.Component {
-    constructor() {
-        super()
+    constructor(props) {
+        super(props)
     }
 
     render() {

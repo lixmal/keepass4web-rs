@@ -3,8 +3,9 @@ import LoginForm from './LoginForm'
 import NavBar from './NavBar'
 import Alert from './Alert'
 import Info from './Info'
+import withNavigateHook from './nagivateHook'
 
-export default class DBLogin extends LoginForm {
+class DBLogin extends LoginForm {
     constructor() {
         super()
         this.url = 'db_login'
@@ -12,10 +13,10 @@ export default class DBLogin extends LoginForm {
     }
 
     handleFile(event) {
-        var file = event.target.files[0]
-        var reader = new FileReader()
+        const file = event.target.files[0]
+        const reader = new FileReader()
 
-        var me = this
+        const me = this
         reader.onload = function () {
             // race condition!?
             me.refs.key.value = reader.result.split(',')[1]
@@ -26,7 +27,7 @@ export default class DBLogin extends LoginForm {
     render() {
         return (
             <div>
-                <NavBar router={this.props.router}/>
+                <NavBar/>
                 <div className="container">
                     <div className={this.classes()}>
                         <form className="kp-login-inner" onSubmit={this.handleLogin}>
@@ -46,3 +47,5 @@ export default class DBLogin extends LoginForm {
         )
     }
 }
+
+export default withNavigateHook(DBLogin)

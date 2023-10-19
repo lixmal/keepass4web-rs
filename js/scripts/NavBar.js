@@ -1,22 +1,24 @@
 import React from 'react'
+import {Link} from "react-router-dom"
 import Timer from './Timer'
+import withNavigateHook from './nagivateHook'
+
 window.$ = window.jQuery = require('jquery')
-var Bootstrap = require('bootstrap')
+const Bootstrap = require('bootstrap')
 
-
-export default class NavBar extends React.Component {
-    constructor() {
-        super()
+class NavBar extends React.Component {
+    constructor(props) {
+        super(props)
         this.onLogout = this.onLogout.bind(this)
         this.onCloseDB = this.onCloseDB.bind(this)
-        this.onTimeUp  = this.onTimeUp.bind(this)
+        this.onTimeUp = this.onTimeUp.bind(this)
     }
 
     onLogout() {
         this.serverRequest = KeePass4Web.ajax('logout', {
             success: function () {
                 KeePass4Web.clearStorage()
-                this.props.router.replace('/user_login')
+                this.props.navigate('/user_login', {replace: true})
             }.bind(this),
             error: KeePass4Web.error.bind(this),
         })
@@ -27,13 +29,12 @@ export default class NavBar extends React.Component {
             success: function () {
                 // redirect to home, so checks for proper login can be made
 
-                var router = this.props.router
+                if (state === undefined)
+                    state = {}
                 // we haven't changed page, so need a workaround
-                router.replace('/db_login')
-                router.replace({
-                    state: state,
-                    pathname: '/'
-                })
+                state.replace = true
+                this.props.navigate('/db_login', {replace: true})
+                this.props.navigate('/', state)
             }.bind(this),
             error: KeePass4Web.error.bind(this),
         })
@@ -58,8 +59,8 @@ export default class NavBar extends React.Component {
     }
 
     render() {
-        var cn = KeePass4Web.getSettings().cn
-        var dropdown, search, timer
+        let cn = KeePass4Web.getSettings().cn;
+        let dropdown, search, timer;
         if (cn) {
             dropdown = (
                 <ul className="dropdown-menu">
@@ -68,23 +69,25 @@ export default class NavBar extends React.Component {
                     <li><a id="closeDB">Close Database</a></li>
                 </ul>
             )
-        }
-        else {
+        } else {
             cn = 'Not logged in'
             dropdown = (
                 <ul className="dropdown-menu">
-                    <li><a href="#/">Login</a></li>
+                    <li><Link to="/" replace>Login</Link></li>
                 </ul>
             )
         }
 
         if (this.props.showSearch) {
-            search =  (
-                <form className="navbar-form navbar-left" role="search" onSubmit={this.props.onSearch.bind(this, this.refs)}>
+            search = (
+                <form className="navbar-form navbar-left" role="search"
+                      onSubmit={this.props.onSearch.bind(this, this.refs)}>
                     <div className="input-group">
-                        <input autoComplete="on" type="search" ref="term" className="form-control" placeholder="Search" autoFocus />
+                        <input autoComplete="on" type="search" ref="term" className="form-control" placeholder="Search"
+                               autoFocus/>
                         <div className="input-group-btn">
-                            <button type="submit" className="btn btn-default"><span className="glyphicon glyphicon-search"></span></button>
+                            <button type="submit" className="btn btn-default"><span
+                                className="glyphicon glyphicon-search"></span></button>
                         </div>
                     </div>
                 </form>
@@ -99,7 +102,8 @@ export default class NavBar extends React.Component {
                             onTimeUp={this.onTimeUp}
                             restart={KeePass4Web.restartTimer}
                         />
-                        <label type="button" className="btn btn-secondary btn-xs" onClick={KeePass4Web.restartTimer.bind(this, true)}>
+                        <label type="button" className="btn btn-secondary btn-xs"
+                               onClick={KeePass4Web.restartTimer.bind(this, true)}>
                             <span className="glyphicon glyphicon-repeat"></span>
                         </label>
                     </div>
@@ -110,20 +114,22 @@ export default class NavBar extends React.Component {
         return (
             <nav className="navbar navbar-default navbar-fixed-top">
                 <div className="navbar-header">
-                    <button type="button" className="navbar-toggle collapsed" data-toggle="collapse" data-target="#navbar-collapse-1" aria-expanded="false">
+                    <button type="button" className="navbar-toggle collapsed" data-toggle="collapse"
+                            data-target="#navbar-collapse-1" aria-expanded="false">
                         <span className="sr-only">Toggle navigation</span>
                         <span className="icon-bar"></span>
                         <span className="icon-bar"></span>
                         <span className="icon-bar"></span>
                     </button>
-                    <a className="navbar-brand" href="#">KeePass 4 Web</a>
+                    <Link className="navbar-brand" to="/" replace>KeePass 4 Web</Link>
                     {timer}
                 </div>
                 <div className="collapse navbar-collapse" id="navbar-collapse-1">
                     {search}
                     <ul className="nav navbar-nav navbar-right">
                         <li className="dropdown">
-                            <a href="#" className="dropdown-toggle" data-toggle="dropdown" role="button" aria-haspopup="true" aria-expanded="false">
+                            <a href="" className="dropdown-toggle" data-toggle="dropdown" role="button"
+                               aria-haspopup="true" aria-expanded="false">
                                 {cn}
                                 <span className="caret"></span>
                             </a>
@@ -136,3 +142,4 @@ export default class NavBar extends React.Component {
     }
 }
 
+export default withNavigateHook(NavBar)

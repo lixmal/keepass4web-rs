@@ -2,7 +2,10 @@ import React from 'react'
 import Clipboard from 'clipboard-polyfill/build/clipboard-polyfill.promise'
 import Classnames from 'classnames'
 
-export default class NodeViewer extends React.Component {
+import withNavigateHook from './nagivateHook'
+
+
+class NodeViewer extends React.Component {
     constructor(props) {
         super(props)
         this.setHide = this.setHide.bind(this)
@@ -362,3 +365,4 @@ export default class NodeViewer extends React.Component {
     }
 }
 
+export default withNavigateHook(NodeViewer)

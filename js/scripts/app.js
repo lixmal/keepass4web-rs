@@ -3,59 +3,43 @@ import '../style/app.css'
 import React from 'react'
 import ReactDOM from 'react-dom'
 
-import Router from 'react-router/lib/Router'
-import Route from 'react-router/lib/Route'
-import useRouterHistory from 'react-router/lib/useRouterHistory'
-import withRouter from 'react-router/lib/withRouter'
-
-import {createHashHistory} from 'history'
-
-import Viewport from './Viewport'
+import {BrowserRouter, Route, Routes} from 'react-router-dom'
 
 import UserLogin from './UserLogin'
 import BackendLogin from './BackendLogin'
 import DBLogin from './DBLogin'
+import Viewport from "./Viewport"
 
-const View = withRouter(Viewport)
-const UserForm = withRouter(UserLogin)
-const BackendForm = withRouter(BackendLogin)
-const DBForm = withRouter(DBLogin)
-
-const appHistory = useRouterHistory(createHashHistory)()
 
 // global namespace
 window.KeePass4Web = {}
 
-KeePass4Web.checkAuth = function (nextState, replace, callback) {
+KeePass4Web.checkAuth = function (state, callback) {
     return KeePass4Web.ajax('authenticated', {
         method: "GET",
+        success: callback,
         error: function (r, s, e) {
             if (r.status != 200 && r.status != 401)
                 return KeePass4Web.error(r, s, e)
 
             let authData = r.responseJSON && r.responseJSON.data
-
-            let state = nextState && nextState.location.state
+            state.redirect = true
 
             // route to proper login page if unauthenticated
             // in that order
             if (!authData) {
                 KeePass4Web.clearStorage()
-                replace({
-                    state: state,
-                    pathname: '/user_login'
-                })
+                this.props.navigate('/user_login', state)
             } else if (authData.user) {
                 let user = authData.user
                 if (user.type === 'redirect') {
                     window.location = user.url
                     // stopping javascript execution to prevent redirect loop
                     throw 'Redirecting'
-                } else if (user.type === 'mask')
-                    replace({
-                        state: state,
-                        pathname: '/user_login'
-                    })
+                } else if (user.type === 'mask') {
+                    this.props.navigate('/user_login', state)
+                } else
+                    alert("unknown login type")
             } else if (!authData.backend) {
                 // TODO: Don't redirect to backend if db is open
                 let template = KeePass4Web.getSettings().template
@@ -63,18 +47,17 @@ KeePass4Web.checkAuth = function (nextState, replace, callback) {
                     window.location = template.url
                     throw 'Redirecting'
                 } else if (template.type === 'mask')
-                    replace({
+                    this.props.history.replace({
                         state: state,
                         pathname: '/backend_login'
                     })
             } else if (!authData.db) {
-                replace({
+                this.props.history.replace({
                     state: state,
                     pathname: '/db_login'
                 })
             }
         }.bind(this),
-        complete: callback,
     })
 }
 
@@ -110,15 +93,15 @@ KeePass4Web.getCSRFToken = function () {
 }
 
 KeePass4Web.setSettings = function (settings) {
-    var stored = KeePass4Web.getSettings()
-    for (var k in settings) {
+    const stored = KeePass4Web.getSettings()
+    for (const k in settings) {
         stored[k] = settings[k]
     }
     localStorage.setItem('settings', JSON.stringify(stored))
 }
 
 KeePass4Web.getSettings = function () {
-    var settings = localStorage.getItem('settings')
+    const settings = localStorage.getItem('settings')
     if (settings)
         return JSON.parse(settings)
     return {}
@@ -135,16 +118,16 @@ KeePass4Web.error = function (r, s, e) {
     if (e === 'abort')
         return
     if (r.status == 401) {
-        if (this.props && this.props.router) {
+        if (this.props.navigate) {
             // redirect first, to hide sensitive data
-            this.props.router.replace('/db_login')
-            this.props.router.replace({
-                state: {info: 'Session expired'},
-                pathname: '/'
+            this.props.navigate('/db_login', {replace: true})
+            this.props.navigate('/', {
+                replace: true,
+                info: 'Session expired'
             })
         } else {
             alert('Your session expired')
-            location.reload()
+            window.location.reload()
         }
     } else {
         let error = e
@@ -163,11 +146,13 @@ KeePass4Web.error = function (r, s, e) {
 
 
 ReactDOM.render(
-    <Router history={appHistory}>
-        <Route path="/" component={View} onEnter={KeePass4Web.checkAuth}/>
-        <Route path="/user_login" component={UserForm}/>
-        <Route path="/backend_login" component={BackendForm}/>
-        <Route path="/db_login" component={DBForm}/>
-    </Router>,
+    <BrowserRouter>
+        <Routes>
+            <Route path="/" index Component={Viewport}/>
+            <Route path="/user_login" Component={UserLogin}/>
+            <Route path="/backend_login" Component={BackendLogin}/>
+            <Route path="/db_login" Component={DBLogin}/>
+        </Routes>
+    </BrowserRouter>,
     document.getElementById('app-content')
 )
