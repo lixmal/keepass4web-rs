@@ -14,19 +14,19 @@ body {
     min-width: 320px;
     max-width: 400px;
     background-color: #f3f3f3;
-    margin:0 auto;
+    margin: 0 auto;
     border-radius: 9px;
-    border: 1px solid ##c5c5c5;
+    border: 1px solid #c5c5c5;
     text-align: center;
 }
 
 .login-inner {
-    margin:0 auto;
+    margin: 0 auto;
     max-width: 380px;
     width: auto;
 }
 
-.login>h4 {
+.login > h4 {
     font-size: 20px;
     margin-left: 5px;
     font-weight: 600;
@@ -47,12 +47,13 @@ body {
 .login-error {
     margin-top: 15px;
     animation: blinker 1s linear;
-    margin-bottom: 0px;
-    padding-bttom: 0px;
+    margin-bottom: 0;
 }
 
 @keyframes blinker {
-    50% { opacity: 0.0; }
+    50% {
+        opacity: 0.0;
+    }
 }
 
 .panel-body {
