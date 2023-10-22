@@ -99,7 +99,6 @@ type OidcClient = Client<
 #[derive(Deserialize)]
 struct OidcParams {
     state: String,
-    session_state: Option<String>,
     error: Option<String>,
     error_description: Option<String>,
     code: String,
