@@ -131,7 +131,7 @@ impl<S, B> Service<ServiceRequest> for CheckAuthMiddleware<S>
                         }
                         Err(err) => {
                             error!("failed to determine login type: {}", err);
-                            HttpResponse::Unauthorized().json(json!(
+                            HttpResponse::InternalServerError().json(json!(
                                {
                                    "success": false,
                                    "message": "unauthorized: failed to determine login type",

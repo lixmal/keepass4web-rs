@@ -249,7 +249,7 @@ async fn logout(request: HttpRequest, session: Session, config: Data<Config>, db
         Ok(logout_type) => logout_type,
         Err(err) => {
             error!("failed to determine logout type: {}", err);
-            return HttpResponse::Unauthorized().json(json!(
+            return HttpResponse::InternalServerError().json(json!(
                {
                    "success": false,
                    "message": "failed to retrieve logout type/url",
