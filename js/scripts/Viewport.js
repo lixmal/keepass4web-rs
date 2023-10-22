@@ -118,23 +118,20 @@ class Viewport extends React.Component {
     }
 
     componentDidMount() {
-        let cb = function () {
-            KeePass4Web.ajax('get_groups', {
-                method: "GET",
-                success: function (data) {
-                    this.setState({
-                        tree: data.data.groups
+        // TODO: add loading mask for the whole viewport while fetching groups
+        KeePass4Web.ajax('get_groups', {
+            method: "GET",
+            success: function (data) {
+                this.setState({
+                    tree: data.data.groups
+                })
+                if (data.data.last_selected)
+                    this.onGroupSelect({
+                        id: data.data.last_selected
                     })
-                    if (data.data.last_selected)
-                        this.onGroupSelect({
-                            id: data.data.last_selected
-                        })
-                }.bind(this),
-                error: KeePass4Web.error.bind(this),
-            })
-        }
-
-        KeePass4Web.checkAuth.call(this, {}, cb.bind(this))
+            }.bind(this),
+            error: KeePass4Web.error.bind(this),
+        })
     }
 
     componentWillUnmount() {

@@ -5,6 +5,7 @@ import ReactDOM from 'react-dom'
 
 import {BrowserRouter, Route, Routes} from 'react-router-dom'
 
+import Splash from "./Splash"
 import Viewport from "./Viewport"
 import UserLogin from './UserLogin'
 import BackendLogin from './BackendLogin'
@@ -116,8 +117,6 @@ KeePass4Web.error = function (r, s, e) {
         return
     if (r.status == 401) {
         if (this.props.navigate) {
-            // redirect first, to hide sensitive data
-            this.props.navigate('/db_login', {replace: true})
             this.props.navigate('/', {
                 replace: true,
                 info: 'Session expired'
@@ -145,7 +144,8 @@ KeePass4Web.error = function (r, s, e) {
 ReactDOM.render(
     <BrowserRouter>
         <Routes>
-            <Route path="/" index Component={Viewport}/>
+            <Route path="/" index Component={Splash}/>
+            <Route path="/keepass" Component={Viewport}/>
             <Route path="/user_login" Component={UserLogin}/>
             <Route path="/backend_login" Component={BackendLogin}/>
             <Route path="/db_login" Component={DBLogin}/>

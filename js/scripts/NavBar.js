@@ -22,7 +22,6 @@ class NavBar extends React.Component {
                 if (data && data.type === 'redirect' && data.url) {
                     window.location = data.url
                 } else {
-                    this.props.navigate('/user_login', {replace: true})
                     this.props.navigate('/', {replace: true})
                 }
             }.bind(this),
@@ -37,9 +36,7 @@ class NavBar extends React.Component {
 
                 if (state === undefined)
                     state = {}
-                // we haven't changed page, so need a workaround
                 state.replace = true
-                this.props.navigate('/db_login', {replace: true})
                 this.props.navigate('/', state)
             }.bind(this),
             error: KeePass4Web.error.bind(this),

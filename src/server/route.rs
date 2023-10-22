@@ -54,6 +54,7 @@ pub fn setup_routes(cfg: &mut web::ServiceConfig) {
 
         // static
         .route("/", web::get().to(index))
+        .route("/keepass", web::get().to(index))
         .route("/user_login", web::get().to(index))
         .route("/backend_login", web::get().to(index))
         .route("/db_login", web::get().to(index))
