@@ -41,4 +41,3 @@ impl Server {
         Ok(server)
     }
 }
-

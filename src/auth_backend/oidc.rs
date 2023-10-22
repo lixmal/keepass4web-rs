@@ -1,3 +1,4 @@
+use std::str::FromStr;
 use std::string::ToString;
 
 use anyhow::{anyhow, bail, Result};
@@ -12,12 +13,16 @@ use openidconnect::{
     ClientSecret,
     CsrfToken,
     EmptyExtraTokenFields,
+    IdToken,
     IdTokenFields,
     IssuerUrl,
+    LogoutRequest,
     Nonce,
     OAuth2TokenResponse,
     PkceCodeChallenge,
     PkceCodeVerifier,
+    PostLogoutRedirectUrl,
+    ProviderMetadataWithLogout,
     RedirectUrl,
     Scope,
     StandardErrorResponse,
@@ -30,12 +35,12 @@ use openidconnect::core::{
     CoreAuthPrompt,
     CoreErrorResponseType,
     CoreGenderClaim,
+    CoreIdToken,
     CoreJsonWebKey,
     CoreJsonWebKeyType,
     CoreJsonWebKeyUse,
     CoreJweContentEncryptionAlgorithm,
     CoreJwsSigningAlgorithm,
-    CoreProviderMetadata,
     CoreRevocableToken,
     CoreRevocationErrorResponse,
     CoreTokenIntrospectionResponse,
@@ -44,7 +49,7 @@ use openidconnect::core::{
 use openidconnect::reqwest::async_http_client;
 use serde::{Deserialize, Serialize};
 
-use crate::auth_backend::{AuthBackend, AuthCache, LoginType, ROUTE_CALLBACK_USER_AUTH, UserInfo};
+use crate::auth_backend::{AuthBackend, AuthCache, LoginType, LogoutType, ROUTE_CALLBACK_USER_AUTH, UserInfo};
 use crate::config::config::Config;
 use crate::config::oidc;
 
@@ -112,10 +117,7 @@ impl Oidc {
     }
 
     fn get_client(&self, host: &str, cache: &AuthCache) -> Result<OidcClient> {
-        let provider_metadata = match cache.downcast_ref::<CoreProviderMetadata>() {
-            Some(v) => v,
-            None => bail!("failed to retrieve provider metadata from cache"),
-        };
+        let provider_metadata = Self::get_metadata(cache)?;
 
         let client: OidcClient = Client::new(
             ClientId::new(self.config.client_id.clone()),
@@ -132,6 +134,13 @@ impl Oidc {
         );
         Ok(client)
     }
+
+    fn get_metadata(cache: &AuthCache) -> Result<&ProviderMetadataWithLogout> {
+        match cache.downcast_ref::<ProviderMetadataWithLogout>() {
+            Some(v) => Ok(v),
+            None => bail!("failed to retrieve provider metadata from cache"),
+        }
+    }
 }
 
 #[async_trait]
@@ -143,7 +152,7 @@ impl AuthBackend for Oidc {
     async fn init(&self) -> Result<AuthCache> {
         Ok(
             Box::new(
-                CoreProviderMetadata::discover_async(
+                ProviderMetadataWithLogout::discover_async(
                     IssuerUrl::from_url(self.config.issuer.clone().unwrap()),
                     async_http_client,
                 ).await?
@@ -182,9 +191,31 @@ impl AuthBackend for Oidc {
         )
     }
 
+    fn get_logout_type(&self, user_info: &UserInfo, _host: &str, _cache: &AuthCache) -> Result<LogoutType> {
+        let provider_metadata = Self::get_metadata(_cache)?;
+        let logout_endpoint = provider_metadata.additional_metadata().end_session_endpoint.
+            clone().ok_or(anyhow!("no session endpoint defined"))?;
 
-    async fn callback(&self, from_session: String, _cache: &AuthCache, _params: serde_json::Value, _host: &str) -> Result<UserInfo> {
-        let oidc_params: OidcParams = serde_json::from_value(_params)?;
+        let mut logout_request = LogoutRequest::from(logout_endpoint)
+            .set_post_logout_redirect_uri(
+                PostLogoutRedirectUrl::new(_host.to_string())?
+            )
+            .set_client_id(ClientId::new(self.config.client_id.clone()));
+
+        if let Some(id_token) = &user_info.additional_data {
+            let token: CoreIdToken = IdToken::from_str(id_token)?;
+            logout_request = logout_request.set_id_token_hint(&token);
+        }
+
+        Ok(
+            LogoutType::Redirect {
+                url: logout_request.http_get_url(),
+            }
+        )
+    }
+
+    async fn callback(&self, from_session: String, cache: &AuthCache, params: serde_json::Value, host: &str) -> Result<UserInfo> {
+        let oidc_params: OidcParams = serde_json::from_value(params)?;
 
         if let Some(err) = oidc_params.error {
             if let Some(err_desc) = oidc_params.error_description {
@@ -199,7 +230,7 @@ impl AuthBackend for Oidc {
             bail!("invalid csrf token (state)");
         }
 
-        let client = self.get_client(_host, _cache)?;
+        let client = self.get_client(host, cache)?;
         let token_response = client
             .exchange_code(AuthorizationCode::new(oidc_params.code))
             .set_pkce_verifier(PkceCodeVerifier::new(state.pkce))
@@ -230,12 +261,18 @@ impl AuthBackend for Oidc {
             Some(n) => n.as_str().to_owned(),
         };
 
+        let mut additional_data: Option<String> = None;
+        if self.config.save_id_token {
+            additional_data = Some(id_token.to_string());
+        }
+
         Ok(
             UserInfo {
                 id,
                 name,
                 db_location: claims.additional_claims().database_location.clone(),
                 keyfile_location: claims.additional_claims().keyfile_location.clone(),
+                additional_data,
             }
         )
     }

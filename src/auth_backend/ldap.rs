@@ -92,6 +92,7 @@ impl AuthBackend for Ldap {
                 name: cn[0].clone(),
                 db_location,
                 keyfile_location,
+                additional_data: None,
             }
         )
     }

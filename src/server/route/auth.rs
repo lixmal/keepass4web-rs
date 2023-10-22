@@ -227,17 +227,36 @@ async fn close_db(session: Session, config: Data<Config>, db_cache: Data<DbCache
 }
 
 #[post("/logout")]
-async fn logout(session: Session, config: Data<Config>, db_cache: Data<DbCache>) -> impl Responder {
-    if let Err(err) = session.get::<UserInfo>(SESSION_KEY_USER) {
-        error!("failed to retrieve session: {}", err);
-        return HttpResponse::InternalServerError().json(json!(
-            {
-                "success": true,
-                "message": "failed to retrieve session",
-            }
-        ));
+async fn logout(request: HttpRequest, session: Session, config: Data<Config>, db_cache: Data<DbCache>, auth_cache: Data<AuthCache>) -> impl Responder {
+    let resp = HttpResponse::InternalServerError().json(json!(
+        {
+            "success": true,
+            "message": "failed to retrieve session",
+        }
+    ));
+    let user_info = match session.get::<UserInfo>(SESSION_KEY_USER) {
+        Err(err) => {
+            error!("failed to retrieve session: {}", err);
+            return resp;
+        }
+        Ok(Some(v)) => v,
+        Ok(None) => return resp,
     };
 
+
+    let host = format!("{}://{}", request.connection_info().scheme(), request.connection_info().host());
+    let logout_type = match auth_backend::new(&config).get_logout_type(&user_info, &host, &auth_cache) {
+        Ok(logout_type) => logout_type,
+        Err(err) => {
+            error!("failed to determine logout type: {}", err);
+            return HttpResponse::Unauthorized().json(json!(
+               {
+                   "success": false,
+                   "message": "failed to retrieve logout type/url",
+               }
+            ));
+        }
+    };
 
     // best effort, key expires anyway
     let _ = _close_db(&session, &config, &db_cache).await;
@@ -246,9 +265,11 @@ async fn logout(session: Session, config: Data<Config>, db_cache: Data<DbCache>)
 
     let username = session.get_user_id();
     info!("logout from '{}': successful", username);
+
     HttpResponse::Ok().json(json!(
         {
             "success": true,
+            "data": logout_type,
         }
     ))
 }
@@ -267,7 +288,6 @@ async fn callback_user_auth(
         return err;
     }
 
-    let auth_backend = auth_backend::new(&config);
     let from_session = match session.get_key(SESSION_KEY_AUTH_STATE) {
         Some(v) => v,
         None => {
@@ -277,7 +297,7 @@ async fn callback_user_auth(
     };
 
     let host = format!("{}://{}", request.connection_info().scheme(), request.connection_info().host());
-    let user_info = match auth_backend.callback(from_session, &auth_cache, params.0, &host).await {
+    let user_info = match auth_backend::new(&config).callback(from_session, &auth_cache, params.0, &host).await {
         Ok(user_info) => user_info,
         Err(err) => {
             info!("user login from '{}': {:?}", username, err);

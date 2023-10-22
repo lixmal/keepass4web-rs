@@ -19,6 +19,7 @@ impl AuthBackend for Test {
                     name: username.to_string(),
                     db_location: None,
                     keyfile_location: None,
+                    additional_data: None,
                 }
             );
         }

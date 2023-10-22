@@ -16,10 +16,15 @@ class NavBar extends React.Component {
 
     onLogout() {
         this.serverRequest = KeePass4Web.ajax('logout', {
-            success: function () {
+            success: function (data) {
                 KeePass4Web.clearStorage()
-                this.props.navigate('/user_login', {replace: true})
-                this.props.navigate('/', {replace: true})
+                data = data && data.data
+                if (data && data.type === 'redirect' && data.url) {
+                    window.location = data.url
+                } else {
+                    this.props.navigate('/user_login', {replace: true})
+                    this.props.navigate('/', {replace: true})
+                }
             }.bind(this),
             error: KeePass4Web.error.bind(this),
         })

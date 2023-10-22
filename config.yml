@@ -48,6 +48,10 @@ OIDC:
     issuer: ''
     client_id: ''
     client_secret: ''
+    # required for logout without confirmation
+    # the token is pretty big and might not fit into a session cookie
+    # disable if issues arise
+    save_id_token: true
     scopes:
       - 'profile'
       # scope containing the keepass_location and/or keyfile_location claims for the authed user

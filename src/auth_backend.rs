@@ -28,6 +28,7 @@ pub struct UserInfo {
     pub name: String,
     pub db_location: Option<String>,
     pub keyfile_location: Option<String>,
+    pub additional_data: Option<String>,
 }
 
 #[derive(Clone, Serialize)]
@@ -42,6 +43,16 @@ pub enum LoginType {
     },
 }
 
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "lowercase")]
+#[serde(tag = "type")]
+pub enum LogoutType {
+    None,
+    Redirect {
+        url: Url,
+    },
+}
+
 #[async_trait]
 pub trait AuthBackend: Send + Sync {
     fn validate_config(&self) -> Result<()> { Ok(()) }
@@ -49,6 +60,8 @@ pub trait AuthBackend: Send + Sync {
     async fn init(&self) -> Result<AuthCache> { Ok(Box::new(())) }
 
     fn get_login_type(&self, host: &str, cache: &AuthCache) -> Result<LoginType>;
+
+    fn get_logout_type(&self, _user_info: &UserInfo, _host: &str, _cache: &AuthCache) -> Result<LogoutType> { Ok(LogoutType::None) }
 
     //  TODO: handle case sensitivity
     fn login(&self, _username: &str, _password: &str) -> Result<UserInfo> {

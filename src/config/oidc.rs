@@ -10,6 +10,7 @@ pub struct Oidc {
     pub client_id: String,
     pub client_secret: String,
     pub scopes: Vec<String>,
+    pub save_id_token: bool,
 }
 
 impl Default for Oidc {
@@ -19,6 +20,7 @@ impl Default for Oidc {
             client_id: "".to_string(),
             client_secret: "".to_string(),
             scopes: vec![],
+            save_id_token: true,
         }
     }
 }
