@@ -6,7 +6,7 @@
     "scripts": {
         "dev": "./node_modules/.bin/browserify -t browserify-css -t babelify js/scripts/app.js -o public/scripts/bundle.js; sed -i 's/node_modules\\/bootstrap\\/dist/assets/g' public/scripts/bundle.js",
         "watch": "./node_modules/.bin/watchify -t browserify-css -t babelify js/scripts/app.js -o public/scripts/bundle.js & sed -i 's/node_modules\\/bootstrap\\/dist/assets/g' public/scripts/bundle.js",
-        "build": "NODE_ENV=production ./node_modules/.bin/browserify -t browserify-css -p [ minifyify --no-map ] -t js/scripts/app.js -o public/scripts/bundle.js; sed -i 's/node_modules\\/bootstrap\\/dist/assets/g' public/scripts/bundle.js"
+        "build": "NODE_ENV=production ./node_modules/.bin/browserify -t browserify-css -p [ minifyify --no-map ] -t babelify js/scripts/app.js -o public/scripts/bundle.js; sed -i 's/node_modules\\/bootstrap\\/dist/assets/g' public/scripts/bundle.js"
     },
     "repository": {
         "type": "git",
