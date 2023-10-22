@@ -25,6 +25,7 @@ impl DbBackend for Filesystem {
         )
     }
 
+    // TODO implement in a non-blocking way
     fn get_key_read(&self) -> Option<Result<Box<dyn Read>>> {
         // return key file only if the key file location was configured
         if let Some(loc) = self.config.keyfile_location.as_ref() {

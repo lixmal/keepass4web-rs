@@ -5,10 +5,11 @@ import ReactDOM from 'react-dom'
 
 import {BrowserRouter, Route, Routes} from 'react-router-dom'
 
+import Viewport from "./Viewport"
 import UserLogin from './UserLogin'
 import BackendLogin from './BackendLogin'
 import DBLogin from './DBLogin'
-import Viewport from "./Viewport"
+import CallbackUserAuth from './CallbackUserAuth'
 
 
 // global namespace
@@ -148,6 +149,7 @@ ReactDOM.render(
             <Route path="/user_login" Component={UserLogin}/>
             <Route path="/backend_login" Component={BackendLogin}/>
             <Route path="/db_login" Component={DBLogin}/>
+            <Route path="/callback_user_auth" Component={CallbackUserAuth}/>
         </Routes>
     </BrowserRouter>,
     document.getElementById('app-content')

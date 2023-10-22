@@ -17,7 +17,7 @@ use crate::auth_backend;
 use crate::auth_backend::{AuthCache, LoginType, SESSION_KEY_AUTH_STATE};
 use crate::auth_backend::LoginType::Redirect;
 use crate::config::config::Config;
-use crate::server::route::API_PATH;
+use crate::server::route::{API_PATH, util};
 use crate::session::AuthSession;
 
 pub(crate) const SESSION_KEY_USER: &str = "user";
@@ -196,7 +196,7 @@ async fn get_login_type(request: &HttpRequest) -> Result<LoginType> {
 
 
 fn csrf_matches(request: &ServiceRequest) -> bool {
-    if let Some(session_token) = request.get_session().get_key(SESSION_KEY_CSRF) {
+    if let Some(session_token) = request.get_session().get_key::<util::CsrfToken>(SESSION_KEY_CSRF) {
         if let Some(request_token) = request.headers().get(CSRF_HEADER) {
             return constant_time_eq(session_token.as_bytes(), request_token.as_bytes());
         }

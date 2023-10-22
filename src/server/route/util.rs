@@ -1,10 +1,12 @@
 use actix_session::Session;
 use actix_web::HttpResponse;
-use anyhow::anyhow;
+use anyhow::{anyhow, bail};
 use linux_keyutils::KeyError;
-use log::error;
+use log::{error, info};
 use serde_json::json;
 
+use crate::auth::{gen_token, SESSION_KEY_CSRF, SESSION_KEY_USER};
+use crate::auth_backend::UserInfo;
 use crate::config::config::Config;
 use crate::keepass::db_cache::{CacheExpiredError, DbCache};
 use crate::keepass::keepass::KeePass;
@@ -12,6 +14,54 @@ use crate::keepass::key::{KeyId, SecretKey};
 use crate::session::AuthSession;
 
 pub const SESSION_KEY_KEY_ID: &str = "key_id";
+
+const CSRF_TOKEN_LENGTH: usize = 32;
+
+pub(crate) type CsrfToken = String;
+
+pub(crate) fn check_user_session(session: &Session, username: &str) -> Result<(), HttpResponse> {
+    // strictly check if session is available, the session backend might be down
+    let session_user = match session.get::<UserInfo>(SESSION_KEY_USER) {
+        Ok(s) => s,
+        Err(err) => {
+            error!("user login from '{}': {}", username, err);
+            return Err(HttpResponse::InternalServerError().json(json!(
+                {
+                    "success": false,
+                    "message": "failed to retrieve session",
+                }
+            )));
+        }
+    };
+
+    if session_user.is_some() {
+        info!("user login from '{}': already logged in", username);
+        return Err(HttpResponse::BadRequest().json(json!(
+            {
+                "success": false,
+                "message": "already logged in",
+            }
+        )));
+    }
+    Ok(())
+}
+
+pub(crate) fn set_user_session(session: Session, user_info: &UserInfo) -> anyhow::Result<CsrfToken> {
+    if let Err(err) = session.insert(SESSION_KEY_USER, user_info) {
+        session.destroy();
+        error!("user login from '{}': {}", user_info.id, err);
+        bail!("failed to set user session");
+    };
+
+    let csrf_token = gen_token(CSRF_TOKEN_LENGTH);
+    if let Err(err) = session.insert(SESSION_KEY_CSRF, csrf_token.as_str()) {
+        session.destroy();
+        error!("user login from '{}': {}", user_info.id, err);
+        bail!("failed to set session csrf token");
+    };
+
+    Ok(csrf_token)
+}
 
 pub(crate) async fn _close_db(session: &Session, config: &Config, db_cache: &DbCache) -> Result<(), HttpResponse> {
     let err_resp = HttpResponse::InternalServerError().json(json!(
@@ -21,7 +71,7 @@ pub(crate) async fn _close_db(session: &Session, config: &Config, db_cache: &DbC
         }
     ));
 
-    let username = session.get_username();
+    let username = session.get_user_id();
 
     // This is idempotent and only fails if there is an issue with the cache backend
     if let Err(err) = db_cache.clear(session).await {

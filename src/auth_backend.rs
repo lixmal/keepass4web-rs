@@ -2,7 +2,7 @@ use std::any::Any;
 
 use anyhow::{bail, Result};
 use async_trait::async_trait;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use url::Url;
 
 use crate::auth_backend::ldap::Ldap;
@@ -22,6 +22,7 @@ pub const ROUTE_CALLBACK_USER_AUTH: &str = "/callback_user_auth";
 
 pub type AuthCache = Box<dyn Any + Send + Sync>;
 
+#[derive(Serialize, Deserialize)]
 pub struct UserInfo {
     pub id: String,
     pub name: String,

@@ -19,6 +19,7 @@ class NavBar extends React.Component {
             success: function () {
                 KeePass4Web.clearStorage()
                 this.props.navigate('/user_login', {replace: true})
+                this.props.navigate('/', {replace: true})
             }.bind(this),
             error: KeePass4Web.error.bind(this),
         })

@@ -97,6 +97,7 @@ export default class LoginForm extends React.Component {
             // don't interfere with ongoing login process
             if (this.serverRequest) return
 
+            // TODO: Fix state, e.g. keepass login has to show error state
             this.authRequest = KeePass4Web.checkAuth(this.props.location.state)
         }.bind(this), 1000 * (KeePass4Web.getSettings().interval || 10 * 60))
     }

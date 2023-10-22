@@ -11,6 +11,7 @@ use log::info;
 use tokio::sync::RwLock;
 
 use crate::auth::SESSION_KEY_USER;
+use crate::auth_backend::UserInfo;
 use crate::keepass::encrypted::Encrypted;
 
 const UPDATE_THRESHOLD: Duration = Duration::from_secs(1);
@@ -78,6 +79,8 @@ impl DbCache {
     }
 
     fn get_user(&self, session: &Session) -> Result<String> {
-        session.get::<String>(SESSION_KEY_USER)?.ok_or(anyhow!("unable to retrieve user from session"))
+        Ok(
+            session.get::<UserInfo>(SESSION_KEY_USER)?.ok_or(anyhow!("unable to retrieve user from session"))?.id
+        )
     }
 }

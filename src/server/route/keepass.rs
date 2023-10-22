@@ -19,7 +19,7 @@ async fn get_groups(session: Session, config: Data<Config>, db_cache: Data<DbCac
         Err(err) => return err,
     };
 
-    let username = session.get_username();
+    let username = session.get_user_id();
     let (groups, last_selected) = match keepass.get_groups() {
         Ok(v) => v,
         Err(err) => {
@@ -51,7 +51,7 @@ async fn get_group_entries(session: Session, config: Data<Config>, db_cache: Dat
         Err(err) => return err,
     };
 
-    let username = session.get_username();
+    let username = session.get_user_id();
     let group_entries = match keepass.get_group_entries(&params) {
         Ok(v) => v,
         Err(err) => {
@@ -80,7 +80,7 @@ async fn get_entry(session: Session, config: Data<Config>, db_cache: Data<DbCach
         Err(err) => return err,
     };
 
-    let username = session.get_username();
+    let username = session.get_user_id();
     let entry = match keepass.get_entry(&params) {
         Ok(v) => v,
         Err(err) => {
@@ -109,7 +109,7 @@ async fn get_protected(session: Session, config: Data<Config>, db_cache: Data<Db
         Err(err) => return err,
     };
 
-    let username = session.get_username();
+    let username = session.get_user_id();
     let protected = match keepass.get_protected(&params) {
         Ok(v) => v,
         Err(err) => {
@@ -138,7 +138,7 @@ async fn get_file(session: Session, config: Data<Config>, db_cache: Data<DbCache
         Err(err) => return err,
     };
 
-    let username = session.get_username();
+    let username = session.get_user_id();
     let file = match keepass.get_file(&params) {
         Ok(v) => v,
         Err(err) => {
@@ -162,7 +162,7 @@ async fn search_entries(session: Session, config: Data<Config>, db_cache: Data<D
         Err(err) => return err,
     };
 
-    let username = session.get_username();
+    let username = session.get_user_id();
     let entries = match keepass.search_entries(&params) {
         Ok(v) => v,
         Err(err) => {
@@ -196,7 +196,7 @@ async fn get_icon(session: Session, config: Data<Config>, db_cache: Data<DbCache
         Ok(v) => v,
         Err(err) => return err,
     };
-    let username = session.get_username();
+    let username = session.get_user_id();
     let icon = match keepass.get_icon(&params) {
         Ok(v) => v,
         Err(err) => {
