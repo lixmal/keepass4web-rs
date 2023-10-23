@@ -86,6 +86,7 @@ impl KeePass {
         )
     }
 
+    #[allow(dead_code)]
     pub fn to_backend(self, db_backend: &mut dyn DbBackend, params: &DbLogin) -> Result<()> {
         let key = Self::db_key_from_params(db_backend, params)?;
         let mut db_write = db_backend.get_db_write()?;
