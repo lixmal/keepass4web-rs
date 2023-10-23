@@ -83,6 +83,8 @@ search:
 # Will be generated on the fly if not specified.
 # Set a static key for sessions to survive server restarts.
 # session_secret_key: ''
+# Cookie session lifetime
+session_lifetime: '1 hour'
 
 listen:  '::'
 port:    8080
