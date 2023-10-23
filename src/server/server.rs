@@ -1,5 +1,7 @@
-use actix_session::{SessionMiddleware, storage::CookieSessionStore};
+use actix_session::{config::BrowserSession, SessionMiddleware, storage::CookieSessionStore};
 use actix_web::{App, HttpServer, web};
+use actix_web::cookie::SameSite::Strict;
+use actix_web::cookie::time::Duration;
 use actix_web::middleware::Logger;
 use anyhow::Result;
 use env_logger::Env;
@@ -29,10 +31,19 @@ impl Server {
                 .app_data(config_data.clone())
                 .wrap(auth::CheckAuth)
                 .wrap(
-                    SessionMiddleware::new(
+                    SessionMiddleware::builder(
                         CookieSessionStore::default(),
                         secret_key.clone(),
                     )
+                        .session_lifecycle(
+                            BrowserSession::default()
+                                .state_ttl(Duration::new(
+                                    config_data.session_lifetime.as_secs() as i64,
+                                    0,
+                                ))
+                        )
+                        .cookie_same_site(Strict)
+                        .build(),
                 )
                 .wrap(Logger::default())
                 .configure(setup_routes)

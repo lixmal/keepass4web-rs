@@ -28,6 +28,8 @@ pub struct Config {
     pub auth_backend: AuthBackend,
     pub db_backend: DbBackend,
     pub session_secret_key: Key,
+    #[serde(with = "humantime_serde")]
+    pub session_lifetime: Duration,
     pub search: Search,
     #[serde(alias = "LDAP", alias = "Ldap")]
     pub ldap: Ldap,
@@ -49,6 +51,8 @@ impl Default for Config {
             auth_backend: Default::default(),
             db_backend: Default::default(),
             session_secret_key: Key(cookie::Key::generate()),
+            // 1 hour
+            session_lifetime: Duration::from_secs(60 * 60),
             search: Default::default(),
             ldap: Default::default(),
             oidc: Default::default(),
