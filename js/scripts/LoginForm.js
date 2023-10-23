@@ -40,7 +40,8 @@ export default class LoginForm extends React.Component {
     }
 
     handleLogin(event) {
-        event.preventDefault()
+        if (event)
+            event.preventDefault()
         if (this.state.mask)
             return
 

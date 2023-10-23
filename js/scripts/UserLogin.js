@@ -12,6 +12,11 @@ class UserLogin extends LoginForm {
         this.url = 'user_login'
     }
 
+    componentDidMount() {
+        if (this.props.location.state && this.props.location.state.no_login)
+            this.handleLogin()
+    }
+
     render() {
         return (
             <div>

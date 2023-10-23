@@ -41,6 +41,10 @@ KeePass4Web.checkAuth = function (state) {
                     throw 'Redirecting'
                 } else if (user.type === 'mask') {
                     this.props.navigate('/user_login', {state: state, redirect: true})
+                } else if (user.type === 'none') {
+                    if (!state) state = {}
+                    state.no_login = true
+                    this.props.navigate('/user_login', {state: state, redirect: true})
                 } else
                     alert("unknown login type")
             } else if (!authData.backend) {

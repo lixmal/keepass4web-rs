@@ -35,6 +35,7 @@ pub struct UserInfo {
 #[serde(rename_all = "lowercase")]
 #[serde(tag = "type")]
 pub enum LoginType {
+    None,
     Mask,
     Redirect {
         url: Url,
