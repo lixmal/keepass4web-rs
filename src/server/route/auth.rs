@@ -152,8 +152,13 @@ async fn db_login(session: Session, config: Data<Config>, db_cache: Data<DbCache
         ));
     }
 
+    let user_info = match get_user_info(&session) {
+        Ok(v) => v,
+        Err(err) => return err,
+    };
+
     let db_backend = db_backend::new(&config);
-    let db = match KeePass::from_backend(&config, db_backend.as_ref(), &params) {
+    let db = match KeePass::from_backend(&config, db_backend.as_ref(), &params, &user_info) {
         Ok(v) => v,
         Err(err) => {
             info!("db login from '{}': {}", username, err);
@@ -212,6 +217,24 @@ async fn db_login(session: Session, config: Data<Config>, db_cache: Data<DbCache
     ))
 }
 
+fn get_user_info(session: &Session) -> Result<UserInfo, HttpResponse> {
+    let resp = HttpResponse::InternalServerError().json(json!(
+        {
+            "success": true,
+            "message": "failed to retrieve session",
+        }
+    ));
+    let user_info = match session.get::<UserInfo>(SESSION_KEY_USER) {
+        Err(err) => {
+            error!("failed to retrieve session: {}", err);
+            return Err(resp);
+        }
+        Ok(Some(v)) => v,
+        Ok(None) => return Err(resp),
+    };
+    Ok(user_info)
+}
+
 #[post("/close_db")]
 async fn close_db(session: Session, config: Data<Config>, db_cache: Data<DbCache>) -> impl Responder {
     if let Err(err) = _close_db(&session, &config, &db_cache).await {
@@ -228,21 +251,10 @@ async fn close_db(session: Session, config: Data<Config>, db_cache: Data<DbCache
 
 #[post("/logout")]
 async fn logout(request: HttpRequest, session: Session, config: Data<Config>, db_cache: Data<DbCache>, auth_cache: Data<AuthCache>) -> impl Responder {
-    let resp = HttpResponse::InternalServerError().json(json!(
-        {
-            "success": true,
-            "message": "failed to retrieve session",
-        }
-    ));
-    let user_info = match session.get::<UserInfo>(SESSION_KEY_USER) {
-        Err(err) => {
-            error!("failed to retrieve session: {}", err);
-            return resp;
-        }
-        Ok(Some(v)) => v,
-        Ok(None) => return resp,
+    let user_info = match get_user_info(&session) {
+        Ok(v) => v,
+        Err(err) => return err,
     };
-
 
     let host = format!("{}://{}", request.connection_info().scheme(), request.connection_info().host());
     let logout_type = match auth_backend::new(&config).get_logout_type(&user_info, &host, &auth_cache) {

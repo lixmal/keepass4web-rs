@@ -12,6 +12,7 @@ use serde::Deserialize;
 use uuid::Uuid;
 
 use crate::auth::DbLogin;
+use crate::auth_backend::UserInfo;
 use crate::config::config::Config;
 use crate::config::search::Search;
 use crate::db_backend::DbBackend;
@@ -74,10 +75,10 @@ impl KeePass {
         Encrypted::encrypt(ser_db, &[], self.config.db_session_timeout)
     }
 
-    pub fn from_backend(config: &Config, db_backend: &dyn DbBackend, params: &DbLogin) -> Result<Self> {
-        let db_key = Self::db_key_from_params(db_backend, &params)?;
+    pub fn from_backend(config: &Config, db_backend: &dyn DbBackend, params: &DbLogin, user_info: &UserInfo) -> Result<Self> {
+        let db_key = Self::db_key_from_params(db_backend, &params, user_info)?;
 
-        let mut db_read = db_backend.get_db_read()?;
+        let mut db_read = db_backend.get_db_read(user_info)?;
         Ok(
             KeePass {
                 config: config.clone(),
@@ -87,15 +88,15 @@ impl KeePass {
     }
 
     #[allow(dead_code)]
-    pub fn to_backend(self, db_backend: &mut dyn DbBackend, params: &DbLogin) -> Result<()> {
-        let key = Self::db_key_from_params(db_backend, params)?;
-        let mut db_write = db_backend.get_db_write()?;
+    pub fn to_backend(self, db_backend: &mut dyn DbBackend, params: &DbLogin, user_info: &UserInfo) -> Result<()> {
+        let key = Self::db_key_from_params(db_backend, params, user_info)?;
+        let mut db_write = db_backend.get_db_write(user_info)?;
         self.db.save(db_write.as_mut(), key)?;
 
         Ok(())
     }
 
-    fn db_key_from_params(db_backend: &dyn DbBackend, params: &DbLogin) -> Result<DatabaseKey> {
+    fn db_key_from_params(db_backend: &dyn DbBackend, params: &DbLogin, user_info: &UserInfo) -> Result<DatabaseKey> {
         let mut db_key = DatabaseKey::new();
         let mut temp1;
         let mut temp2;
@@ -106,7 +107,7 @@ impl KeePass {
 
             temp1 = keyfile.as_slice();
             db_key = db_key.with_keyfile(&mut temp1)?;
-        } else if let Some(keyfile) = db_backend.get_key_read() {
+        } else if let Some(keyfile) = db_backend.get_key_read(user_info) {
             temp2 = keyfile?;
             db_key = db_key.with_keyfile(&mut temp2)?;
         }
@@ -314,6 +315,7 @@ mod tests {
     use actix_web::dev::Payload;
 
     use crate::auth::DbLogin;
+    use crate::auth_backend::UserInfo;
     use crate::config::backend::DbBackend;
     use crate::config::config::Config;
     use crate::db_backend;
@@ -323,9 +325,6 @@ mod tests {
 
     #[actix_web::test]
     async fn database_roundtrip() {
-        let req = test::TestRequest::default().to_http_request();
-        let session = Session::from_request(&req, &mut Payload::None).await.unwrap();
-
         let params = DbLogin {
             password: Some("test".to_string()),
             key: None,
@@ -337,7 +336,14 @@ mod tests {
         let test_backend: &mut Test = db_backend.as_any().downcast_mut().unwrap();
         test_backend.buf.extend_from_slice(&fs::read("tests/test.kdbx").unwrap());
 
-        let keepass = KeePass::from_backend(&config, test_backend, &params).unwrap();
+        let user_info = UserInfo{
+            id: "".to_string(),
+            name: "".to_string(),
+            db_location: None,
+            keyfile_location: None,
+            additional_data: None,
+        };
+        let keepass = KeePass::from_backend(&config, test_backend, &params, &user_info).unwrap();
 
         let (mut key, enc) = keepass.to_enc().unwrap();
 
@@ -347,12 +353,12 @@ mod tests {
         let dec = KeePass::from_enc(&config, ret_key, enc).unwrap();
 
         // can't clone, so we read in another one
-        let keepass = KeePass::from_backend(&config, test_backend, &params).unwrap();
+        let keepass = KeePass::from_backend(&config, test_backend, &params, &user_info).unwrap();
 
         assert_eq!(keepass.db, dec.db);
 
         test_backend.buf = Vec::new();
-        keepass.to_backend(test_backend, &params).unwrap();
+        keepass.to_backend(test_backend, &params, &user_info).unwrap();
 
         // TODO: compare KeePass::to_backend result
     }

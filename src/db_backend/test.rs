@@ -2,6 +2,7 @@ use std::any::Any;
 use std::io::{Read, Write};
 
 use anyhow::Result;
+use crate::auth_backend::UserInfo;
 
 use crate::db_backend::DbBackend;
 
@@ -14,15 +15,15 @@ impl DbBackend for Test {
         true
     }
 
-    fn get_db_read(&self) -> Result<Box<dyn Read + '_>> {
+    fn get_db_read(&self, _: &UserInfo) -> Result<Box<dyn Read + '_>> {
         Ok(Box::new(self.buf.as_slice()))
     }
 
-    fn get_key_read(&self) -> Option<Result<Box<dyn Read>>> {
+    fn get_key_read(&self, _: &UserInfo) -> Option<Result<Box<dyn Read + '_>>> {
         None
     }
 
-    fn get_db_write(&mut self) -> Result<Box<dyn Write + '_>> {
+    fn get_db_write(&mut self, _: &UserInfo) -> Result<Box<dyn Write + '_>> {
         Ok(Box::new(&mut self.buf))
     }
 
