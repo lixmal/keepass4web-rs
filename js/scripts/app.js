@@ -16,22 +16,23 @@ import CallbackUserAuth from './CallbackUserAuth'
 // global namespace
 window.KeePass4Web = {}
 
-KeePass4Web.checkAuth = function (state, callback) {
+KeePass4Web.checkAuth = function (state) {
     return KeePass4Web.ajax('authenticated', {
         method: "GET",
-        success: callback,
+        success: function () {
+            this.props.navigate('/keepass', {replace: true})
+        }.bind(this),
         error: function (r, s, e) {
             if (r.status != 200 && r.status != 401)
                 return KeePass4Web.error(r, s, e)
 
             let authData = r.responseJSON && r.responseJSON.data
-            state.redirect = true
 
             // route to proper login page if unauthenticated
             // in that order
             if (!authData) {
                 KeePass4Web.clearStorage()
-                this.props.navigate('/user_login', state)
+                this.props.navigate('/user_login', {state: state, redirect: true})
             } else if (authData.user) {
                 let user = authData.user
                 if (user.type === 'redirect') {
@@ -39,7 +40,7 @@ KeePass4Web.checkAuth = function (state, callback) {
                     // stopping javascript execution to prevent redirect loop
                     throw 'Redirecting'
                 } else if (user.type === 'mask') {
-                    this.props.navigate('/user_login', state)
+                    this.props.navigate('/user_login', {state: state, redirect: true})
                 } else
                     alert("unknown login type")
             } else if (!authData.backend) {
@@ -49,12 +50,10 @@ KeePass4Web.checkAuth = function (state, callback) {
                     window.location = template.url
                     throw 'Redirecting'
                 } else if (template.type === 'mask')
-                    this.props.navigate('/user_login', state)
+                    this.props.navigate('/user_login', {state: state, redirect: true})
             } else if (!authData.db) {
-                this.props.navigate('/db_login', state)
+                this.props.navigate('/db_login', {state: state, redirect: true})
             }
-
-            return false
         }.bind(this),
     })
 }
@@ -118,11 +117,13 @@ KeePass4Web.error = function (r, s, e) {
     if (r.status == 401) {
         if (this.props.navigate) {
             this.props.navigate('/', {
+                state: {
+                    info: 'Session expired'
+                },
                 replace: true,
-                info: 'Session expired'
             })
         } else {
-            alert('Your session expired')
+            alert('The session expired')
             window.location.reload()
         }
     } else {

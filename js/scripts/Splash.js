@@ -1,22 +1,23 @@
 import React from 'react'
 
-
 import NavBar from "./NavBar"
+
 import withNavigateHook from "./nagivateHook"
 
 class Splash extends React.Component {
-
     componentDidMount() {
-        // TODO: cancel this on unmount
-        KeePass4Web.checkAuth.call(this, {}, function () {
-            this.props.navigate('/keepass', {replace: true})
-        }.bind(this))
+        // pass previous state to next route to display errors etc
+        this.serverRequest = KeePass4Web.checkAuth.call(this, this.props.location.state)
+    }
+
+    componentWillUnmount() {
+        if (this.serverRequest)
+            this.serverRequest.abort()
     }
 
     render() {
-        // TODO: show errors here
         return (
-            <div className={"loading-mask"}>
+            <div className="loading-mask">
                 <NavBar/>
             </div>
         )

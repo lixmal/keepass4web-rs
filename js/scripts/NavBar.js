@@ -33,11 +33,7 @@ class NavBar extends React.Component {
         this.serverRequest = KeePass4Web.ajax('close_db', {
             success: function () {
                 // redirect to home, so checks for proper login can be made
-
-                if (state === undefined)
-                    state = {}
-                state.replace = true
-                this.props.navigate('/', state)
+                this.props.navigate('/', {state: state, replace: true})
             }.bind(this),
             error: KeePass4Web.error.bind(this),
         })

@@ -46,7 +46,7 @@ class CallbackUserAuth extends React.Component {
                 <div className="container">
                     <div className="kp-login">
                         <Alert error={this.state.error}/>
-                        <Link to={"/"}>Get me home</Link>
+                        <Link to="/" replace>Get me home</Link>
                     </div>
                 </div>
             </div>

@@ -8,7 +8,7 @@ export default class LoginForm extends React.Component {
         this.handleLogin = this.handleLogin.bind(this)
         this.abortRequests = this.abortRequests.bind(this)
         this.state = {
-            error: false,
+            error: null,
             mask: false
         }
     }
@@ -39,9 +39,6 @@ export default class LoginForm extends React.Component {
             this.authRequest.abort()
     }
 
-    routerWillLeave() {
-    }
-
     handleLogin(event) {
         event.preventDefault()
         if (this.state.mask)
@@ -50,7 +47,7 @@ export default class LoginForm extends React.Component {
         this.abortRequests()
 
         this.setState({
-            error: false,
+            error: null,
             mask: true
         })
         this.serverRequest = KeePass4Web.ajax(this.url, {
@@ -59,7 +56,6 @@ export default class LoginForm extends React.Component {
                     KeePass4Web.setCSRFToken(data.data.csrf_token)
                     KeePass4Web.setSettings(data.data.settings)
                 }
-
             }.bind(this),
             data: this.transformRefs(this.refs),
             error: function (r, s, e) {
@@ -77,15 +73,9 @@ export default class LoginForm extends React.Component {
             }.bind(this),
             complete: function () {
                 this.serverRequest = null
-
-                this.routerWillLeave = function () {
-                    this.setState({
-                        mask: false
-                    })
-                }
-                // even on fail this will redirect to root and check which authentication is required
-                // in case some previous auth expired while the user took too much time
-                this.props.navigate('/', {replace: true})
+                // check which authentication is required next
+                // preceding auth could've expired
+                this.authRequest = KeePass4Web.checkAuth.call(this)
             }.bind(this)
         })
 
@@ -97,8 +87,8 @@ export default class LoginForm extends React.Component {
             // don't interfere with ongoing login process
             if (this.serverRequest) return
 
-            // TODO: Fix state, e.g. keepass login has to show error state
-            this.authRequest = KeePass4Web.checkAuth(this.props.location.state)
+            // keep state for "session expired" etc messages
+            this.authRequest = KeePass4Web.checkAuth.call(this, this.props.location.state)
         }.bind(this), 1000 * (KeePass4Web.getSettings().interval || 10 * 60))
     }
 
