@@ -307,6 +307,7 @@ async fn callback_user_auth(
             return embed_in_index(false, Some("failed to retrieve session auth state".to_string()), None).await;
         }
     };
+    session.remove(SESSION_KEY_AUTH_STATE);
 
     let host = format!("{}://{}", request.connection_info().scheme(), request.connection_info().host());
     let user_info = match auth_backend::new(&config).callback(from_session, &auth_cache, params.0, &host).await {
