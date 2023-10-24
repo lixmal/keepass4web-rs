@@ -1,4 +1,4 @@
-use actix_session::{config::BrowserSession, SessionMiddleware, storage::CookieSessionStore};
+use actix_session::{config::PersistentSession, SessionMiddleware, storage::CookieSessionStore};
 use actix_web::{App, HttpServer, web};
 use actix_web::cookie::SameSite::Strict;
 use actix_web::cookie::time::Duration;
@@ -36,8 +36,8 @@ impl Server {
                         secret_key.clone(),
                     )
                         .session_lifecycle(
-                            BrowserSession::default()
-                                .state_ttl(Duration::new(
+                            PersistentSession::default()
+                                .session_ttl(Duration::new(
                                     config_data.session_lifetime.as_secs() as i64,
                                     0,
                                 ))
