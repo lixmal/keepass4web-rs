@@ -85,6 +85,9 @@ search:
 # session_secret_key: ''
 # Cookie session lifetime
 session_lifetime: '1 hour'
+# Cookie same site setting: strict/lax/none
+# Redirecting backends might require lax here
+cookie_samesite: 'strict'
 
 listen:  '::'
 port:    8080

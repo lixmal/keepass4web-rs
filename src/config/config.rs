@@ -6,9 +6,10 @@ use actix_web::cookie;
 use anyhow::Result;
 use serde::Deserialize;
 use serde_yaml::from_reader;
-use crate::{auth_backend, db_backend};
 
+use crate::{auth_backend, db_backend};
 use crate::config::backend::{AuthBackend, DbBackend};
+use crate::config::cookie::SameSiteDef;
 use crate::config::filesystem::Filesystem;
 use crate::config::key::Key;
 use crate::config::ldap::Ldap;
@@ -30,6 +31,8 @@ pub struct Config {
     pub session_secret_key: Key,
     #[serde(with = "humantime_serde")]
     pub session_lifetime: Duration,
+    #[serde(with = "SameSiteDef")]
+    pub cookie_samesite: cookie::SameSite,
     pub search: Search,
     #[serde(alias = "LDAP", alias = "Ldap")]
     pub ldap: Ldap,
@@ -53,6 +56,7 @@ impl Default for Config {
             session_secret_key: Key(cookie::Key::generate()),
             // 1 hour
             session_lifetime: Duration::from_secs(60 * 60),
+            cookie_samesite: cookie::SameSite::Strict,
             search: Default::default(),
             ldap: Default::default(),
             oidc: Default::default(),
@@ -66,7 +70,7 @@ impl Config {
         let file = File::open(filename)?;
         let conf: Config = from_reader(file)?;
 
-        auth_backend::new(&conf ).validate_config()?;
+        auth_backend::new(&conf).validate_config()?;
         db_backend::new(&conf).validate_config()?;
 
         Ok(conf)

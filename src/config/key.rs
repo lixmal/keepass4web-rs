@@ -1,5 +1,4 @@
 use actix_web::cookie;
-use anyhow::Result;
 use serde::{Deserialize, Deserializer};
 
 #[derive(Clone)]

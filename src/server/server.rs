@@ -1,6 +1,5 @@
 use actix_session::{config::PersistentSession, SessionMiddleware, storage::CookieSessionStore};
 use actix_web::{App, HttpServer, web};
-use actix_web::cookie::SameSite::Strict;
 use actix_web::cookie::time::Duration;
 use actix_web::middleware::Logger;
 use anyhow::Result;
@@ -42,7 +41,7 @@ impl Server {
                                     0,
                                 ))
                         )
-                        .cookie_same_site(Strict)
+                        .cookie_same_site(config_data.cookie_samesite)
                         .build(),
                 )
                 .wrap(Logger::default())

@@ -5,3 +5,4 @@ pub mod backend;
 pub mod key;
 pub mod search;
 pub mod oidc;
+pub mod cookie;
