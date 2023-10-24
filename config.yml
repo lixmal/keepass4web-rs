@@ -9,7 +9,7 @@ db_backend: 'Filesystem'
 # backend to authenticate users before anything else
 # available: None, LDAP, OIDC
 # None is only useful in single-user environments
-auth_backend: 'Test'
+auth_backend: 'None'
 
 ### Database backends ###
 
@@ -17,7 +17,7 @@ auth_backend: 'Test'
 Filesystem:
     db_location: './db.kdbx'
     # optional, storing key files on the filesystem is not recommended
-    # keyfile_location: '/opt/keepass4web/db.kdbx'
+    # keyfile_location: './db.key'
 
 ### Authentication backends ###
 
@@ -45,7 +45,7 @@ LDAP:
 # open id connect specific configuration, auth_backend = 'OIDC'
 OIDC:
     # url to the issuer (discovery url)
-    issuer: ''
+    # issuer: ''
     client_id: ''
     client_secret: ''
     # required for logout without confirmation

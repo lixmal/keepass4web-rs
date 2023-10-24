@@ -124,7 +124,7 @@ Example:
       --security-opt seccomp=seccomp/keyring.json \
       ghcr.io/lixmal/keepass4web-rs:master
 
-(username/password/master password: `test`)
+(master password: `test`)
 
 ### Classic
 
