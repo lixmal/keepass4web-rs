@@ -61,11 +61,20 @@ class NavBar extends React.Component {
         let cn = KeePass4Web.getSettings().cn;
         let dropdown, search, timer;
         if (cn) {
+            let closeDbHidden = true;
+            if (
+                this.props.location
+                && this.props.location.pathname !== '/backend_login'
+                && this.props.location.pathname !== '/db_login'
+            ) {
+                closeDbHidden = false
+            }
+
             dropdown = (
                 <ul className="dropdown-menu">
                     <li><a id="logout">Logout</a></li>
                     <li role="separator" className="divider"></li>
-                    <li><a id="closeDB">Close Database</a></li>
+                    <li><a id="closeDB" style={closeDbHidden ? {visibility: 'hidden'} : {}}>Close Database</a></li>
                 </ul>
             )
         } else {
