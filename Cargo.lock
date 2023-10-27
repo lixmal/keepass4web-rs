@@ -1691,22 +1691,18 @@ dependencies = [
  "futures-util",
  "humantime-serde",
  "keepass",
- "lazy_static",
  "ldap3",
  "linux-keyutils",
  "log",
  "mime",
- "once_cell",
  "openidconnect",
  "postcard",
  "rand",
  "regex",
  "secrecy",
- "secstr",
  "serde",
  "serde_json",
  "serde_millis",
- "serde_path_to_error",
  "serde_yaml",
  "tokio",
  "url",
@@ -2567,7 +2563,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e04f657244f605c4cf38f6de5993e8bd050c8a303f86aeabff142d5c7c113e12"
 dependencies = [
  "libc",
- "serde",
 ]
 
 [[package]]
