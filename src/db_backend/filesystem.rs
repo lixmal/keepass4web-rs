@@ -1,9 +1,11 @@
 use std::any::Any;
-use std::fs::File;
-use std::io::{Read, Write};
 use std::path::Path;
+use std::pin::Pin;
 
 use anyhow::Result;
+use async_trait::async_trait;
+use tokio::fs::File;
+use tokio::io::{AsyncRead, AsyncWrite};
 
 use crate::auth_backend::UserInfo;
 use crate::config::config::Config;
@@ -14,12 +16,13 @@ pub struct Filesystem {
     pub config: filesystem::Filesystem,
 }
 
+#[async_trait]
 impl DbBackend for Filesystem {
     fn authenticated(&self) -> bool {
         true
     }
 
-    fn get_db_read(&self, user_info: &UserInfo) -> Result<Box<dyn Read + '_>> {
+    async fn get_db_read(&self, user_info: &UserInfo) -> Result<Pin<Box<dyn AsyncRead + '_>>> {
         let mut path = self.config.db_location.as_path();
 
         if let Some(db_location) = &user_info.db_location {
@@ -27,14 +30,13 @@ impl DbBackend for Filesystem {
         }
 
         Ok(
-            Box::new(File::open(
+            Box::pin(File::open(
                 path
-            )?)
+            ).await?)
         )
     }
 
-    // TODO implement in a non-blocking way
-    fn get_key_read(&self, user_info: &UserInfo) -> Option<Result<Box<dyn Read + '_>>> {
+    async fn get_key_read(&self, user_info: &UserInfo) -> Option<Result<Pin<Box<dyn AsyncRead + '_>>>> {
         let mut path = None;
         if let Some(p) = &user_info.keyfile_location {
             path = Some(Path::new(p));
@@ -44,9 +46,9 @@ impl DbBackend for Filesystem {
 
         // return key file only if the key file location was configured
         if let Some(loc) = path {
-            return match File::open(loc) {
+            return match File::open(loc).await {
                 Ok(keyfile) => {
-                    Some(Ok(Box::new(keyfile)))
+                    Some(Ok(Box::pin(keyfile)))
                 }
                 Err(err) => Some(Err(err.into())),
             };
@@ -55,7 +57,7 @@ impl DbBackend for Filesystem {
         None
     }
 
-    fn get_db_write(&mut self, user_info: &UserInfo) -> Result<Box<dyn Write + '_>> {
+    async fn get_db_write(&mut self, user_info: &UserInfo) -> Result<Pin<Box<dyn AsyncWrite + '_>>> {
         let mut path = self.config.db_location.as_path();
 
         if let Some(db_location) = &user_info.db_location {
@@ -63,9 +65,9 @@ impl DbBackend for Filesystem {
         }
 
         Ok(
-            Box::new(File::open(
+            Box::pin(File::open(
                 path
-            )?)
+            ).await?)
         )
     }
 

@@ -75,31 +75,34 @@ impl KeePass {
         Encrypted::encrypt(ser_db, &[], self.config.db_session_timeout)
     }
 
-    pub fn from_backend(config: &Config, db_backend: &dyn DbBackend, params: &DbLogin, user_info: &UserInfo) -> Result<Self> {
-        let db_key = Self::db_key_from_params(db_backend, &params, user_info)?;
+    pub async fn from_backend(config: &Config, db_backend: &dyn DbBackend, params: &DbLogin, user_info: &UserInfo) -> Result<Self> {
+        let db_key = Self::db_key_from_params(db_backend, &params, user_info).await?;
 
-        let mut db_read = db_backend.get_db_read(user_info)?;
+        let db_read = db_backend.get_db_read(user_info).await?;
+        let mut sync_read = tokio_util::io::SyncIoBridge::new(db_read);
+
         Ok(
             KeePass {
                 config: config.clone(),
-                db: Database::open(db_read.as_mut(), db_key)?,
+                db: Database::open(&mut sync_read, db_key)?,
             }
         )
     }
 
     #[allow(dead_code)]
-    pub fn to_backend(self, db_backend: &mut dyn DbBackend, params: &DbLogin, user_info: &UserInfo) -> Result<()> {
-        let key = Self::db_key_from_params(db_backend, params, user_info)?;
-        let mut db_write = db_backend.get_db_write(user_info)?;
-        self.db.save(db_write.as_mut(), key)?;
+    pub async fn to_backend(self, db_backend: &mut dyn DbBackend, params: &DbLogin, user_info: &UserInfo) -> Result<()> {
+        let key = Self::db_key_from_params(db_backend, params, user_info).await?;
+        let db_write = db_backend.get_db_write(user_info).await?;
+        let mut sync_write = tokio_util::io::SyncIoBridge::new(db_write);
+        self.db.save(&mut sync_write, key)?;
 
         Ok(())
     }
 
-    fn db_key_from_params(db_backend: &dyn DbBackend, params: &DbLogin, user_info: &UserInfo) -> Result<DatabaseKey> {
+    async fn db_key_from_params(db_backend: &dyn DbBackend, params: &DbLogin, user_info: &UserInfo) -> Result<DatabaseKey> {
         let mut db_key = DatabaseKey::new();
         let mut temp1;
-        let mut temp2;
+        let temp2;
         let keyfile;
         if let Some(keyfile_b64) = &params.key {
             // TODO: use constant time decode against timing attacks
@@ -107,9 +110,10 @@ impl KeePass {
 
             temp1 = keyfile.as_slice();
             db_key = db_key.with_keyfile(&mut temp1)?;
-        } else if let Some(keyfile) = db_backend.get_key_read(user_info) {
+        } else if let Some(keyfile) = db_backend.get_key_read(user_info).await {
             temp2 = keyfile?;
-            db_key = db_key.with_keyfile(&mut temp2)?;
+            let mut sync_read = tokio_util::io::SyncIoBridge::new(temp2);
+            db_key = db_key.with_keyfile(&mut sync_read)?;
         }
 
         if let Some(pw) = &params.password {
@@ -308,20 +312,13 @@ impl KeePass {
 
 #[cfg(test)]
 mod tests {
-    use std::fs;
+    use tokio::fs;
 
-    use actix_session::Session;
-    use actix_web::{FromRequest, test};
-    use actix_web::dev::Payload;
-
-    use crate::auth::DbLogin;
-    use crate::auth_backend::UserInfo;
     use crate::config::backend::DbBackend;
-    use crate::config::config::Config;
     use crate::db_backend;
     use crate::db_backend::test::Test;
-    use crate::keepass::keepass::KeePass;
-    use crate::keepass::key::SecretKey;
+
+    use super::*;
 
     #[actix_web::test]
     async fn database_roundtrip() {
@@ -334,16 +331,16 @@ mod tests {
 
         let mut db_backend = db_backend::new(&config);
         let test_backend: &mut Test = db_backend.as_any().downcast_mut().unwrap();
-        test_backend.buf.extend_from_slice(&fs::read("tests/test.kdbx").unwrap());
+        test_backend.buf.extend_from_slice(&fs::read("tests/test.kdbx").await.unwrap());
 
-        let user_info = UserInfo{
+        let user_info = UserInfo {
             id: "".to_string(),
             name: "".to_string(),
             db_location: None,
             keyfile_location: None,
             additional_data: None,
         };
-        let keepass = KeePass::from_backend(&config, test_backend, &params, &user_info).unwrap();
+        let keepass = KeePass::from_backend(&config, test_backend, &params, &user_info).await.unwrap();
 
         let (mut key, enc) = keepass.to_enc().unwrap();
 
@@ -353,12 +350,12 @@ mod tests {
         let dec = KeePass::from_enc(&config, ret_key, enc).unwrap();
 
         // can't clone, so we read in another one
-        let keepass = KeePass::from_backend(&config, test_backend, &params, &user_info).unwrap();
+        let keepass = KeePass::from_backend(&config, test_backend, &params, &user_info).await.unwrap();
 
         assert_eq!(keepass.db, dec.db);
 
         test_backend.buf = Vec::new();
-        keepass.to_backend(test_backend, &params, &user_info).unwrap();
+        keepass.to_backend(test_backend, &params, &user_info).await.unwrap();
 
         // TODO: compare KeePass::to_backend result
     }
