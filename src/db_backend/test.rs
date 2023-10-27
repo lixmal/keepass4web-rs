@@ -18,7 +18,7 @@ impl DbBackend for Test {
         true
     }
 
-    async fn get_db_read(&self, user_info: &UserInfo) -> Result<Pin<Box<dyn AsyncRead + '_>>> {
+    async fn get_db_read(&self, _user_info: &UserInfo) -> Result<Pin<Box<dyn AsyncRead + '_>>> {
         Ok(Box::pin(self.buf.as_slice()))
     }
 
@@ -26,8 +26,10 @@ impl DbBackend for Test {
         None
     }
 
-    async fn get_db_write(&mut self, _: &UserInfo) -> Result<Pin<Box<dyn AsyncWrite + '_>>> {
-        Ok(Box::pin(&mut self.buf))
+    async fn get_db_write(&mut self, _user_info: &UserInfo) -> Result<Pin<Box<dyn AsyncWrite + '_>>> {
+        Ok(
+            Box::pin(&mut self.buf)
+        )
     }
 
     fn as_any(&mut self) -> &mut dyn Any {

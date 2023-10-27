@@ -16,5 +16,6 @@ pub enum DbBackend {
     Test,
     #[default]
     Filesystem,
+    Http,
 }
 

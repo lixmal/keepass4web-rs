@@ -1,5 +1,4 @@
 use std::any::Any;
-use std::io::{Read, Write};
 use std::pin::Pin;
 
 use actix_web::web::Form;
@@ -35,5 +34,6 @@ pub fn new(config: &Config) -> Box<dyn DbBackend> {
     match config.db_backend {
         backend::DbBackend::Test => Box::new(Test::new()),
         backend::DbBackend::Filesystem => Box::new(Filesystem::new(config)),
+        backend::DbBackend::Http => Box::new(Http::new(config)),
     }
 }

@@ -14,7 +14,7 @@ actix-files = "0.6.2"
 actix-web = "4"
 actix-session = { version = "0.8.0", features = ["cookie-session"] }
 tokio = { version = "1.33.0", features = ["rt", "rt-multi-thread", "macros", "fs"] }
-tokio-util = { version = "0.7.10", features = ["io", "io-util"] }
+tokio-util = { version = "0.7.10", features = ["io", "io-util", "compat"] }
 serde = { version = "1.0.189", features = ["derive"] }
 serde_json = "1.0.107"
 serde_yaml = "0.9.25"
@@ -26,7 +26,6 @@ env_logger = { version = "0.10.0", features = [] }
 log = "0.4.20"
 rand = "0.8.5"
 keepass = { git = "https://github.com/lixmal/keepass-rs", features = ["serialization", "save_kdbx4"] }
-futures-util = "0.3.28"
 zeroize = { version = "1.6.0", features = ["derive", "std"] }
 secrecy = "0.8.0"
 uuid = { version = "1.5.0", features = ["v4"] }
@@ -39,6 +38,9 @@ url = { version = "2.4.1", features = ["serde"] }
 openidconnect = "3.4.0"
 async-trait = "0.1.74"
 ldap3 = { version = "0.11.3", default-features = false, features = ["tls-rustls"] }
+reqwest = { version = "0.11.22", features = ["rustls", "__tls", "rustls-tls", "stream", "webpki-roots", "rustls-tls-webpki-roots"], default-features = false }
+futures = "0.3.28"
+futures-util = { version = "0.3.29", default-features = false, features = ["io"] }
 
 [dev-dependencies]
 clippy = "0.0.302"

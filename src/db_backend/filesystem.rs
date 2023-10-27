@@ -67,7 +67,7 @@ impl DbBackend for Filesystem {
         Ok(
             Box::pin(File::open(
                 path
-            ).await?)
+            ).await?),
         )
     }
 

@@ -9,7 +9,9 @@ use keepass::db::{Icon, Node, Value};
 use regex::Regex;
 use secrecy::{ExposeSecret, SecretString};
 use serde::Deserialize;
+use tokio::io::AsyncReadExt;
 use uuid::Uuid;
+use zeroize::Zeroize;
 
 use crate::auth::DbLogin;
 use crate::auth_backend::UserInfo;
@@ -78,13 +80,19 @@ impl KeePass {
     pub async fn from_backend(config: &Config, db_backend: &dyn DbBackend, params: &DbLogin, user_info: &UserInfo) -> Result<Self> {
         let db_key = Self::db_key_from_params(db_backend, &params, user_info).await?;
 
-        let db_read = db_backend.get_db_read(user_info).await?;
-        let mut sync_read = tokio_util::io::SyncIoBridge::new(db_read);
+        let mut db_read = db_backend.get_db_read(user_info).await?;
+
+        // bridge sync and async by caching the whole file in memory for now
+        let mut buf = vec![];
+        db_read.read_to_end(&mut buf).await?;
+
+        let db = Database::open(&mut buf.as_slice(), db_key)?;
+        buf.zeroize();
 
         Ok(
             KeePass {
                 config: config.clone(),
-                db: Database::open(&mut sync_read, db_key)?,
+                db,
             }
         )
     }
@@ -92,9 +100,13 @@ impl KeePass {
     #[allow(dead_code)]
     pub async fn to_backend(self, db_backend: &mut dyn DbBackend, params: &DbLogin, user_info: &UserInfo) -> Result<()> {
         let key = Self::db_key_from_params(db_backend, params, user_info).await?;
-        let db_write = db_backend.get_db_write(user_info).await?;
-        let mut sync_write = tokio_util::io::SyncIoBridge::new(db_write);
-        self.db.save(&mut sync_write, key)?;
+        let mut db_write = db_backend.get_db_write(user_info).await?;
+
+
+        let mut buf: Vec<u8> = vec![];
+        self.db.save(&mut buf, key)?;
+        tokio::io::copy(&mut buf.as_slice(), &mut db_write).await?;
+        buf.zeroize();
 
         Ok(())
     }
@@ -102,7 +114,7 @@ impl KeePass {
     async fn db_key_from_params(db_backend: &dyn DbBackend, params: &DbLogin, user_info: &UserInfo) -> Result<DatabaseKey> {
         let mut db_key = DatabaseKey::new();
         let mut temp1;
-        let temp2;
+        let mut temp2;
         let keyfile;
         if let Some(keyfile_b64) = &params.key {
             // TODO: use constant time decode against timing attacks
@@ -112,8 +124,11 @@ impl KeePass {
             db_key = db_key.with_keyfile(&mut temp1)?;
         } else if let Some(keyfile) = db_backend.get_key_read(user_info).await {
             temp2 = keyfile?;
-            let mut sync_read = tokio_util::io::SyncIoBridge::new(temp2);
-            db_key = db_key.with_keyfile(&mut sync_read)?;
+            // TODO: fix this
+            let mut buf = vec![];
+            temp2.read_to_end(&mut buf).await?;
+            db_key = db_key.with_keyfile(&mut buf.as_slice())?;
+            buf.zeroize();
         }
 
         if let Some(pw) = &params.password {
