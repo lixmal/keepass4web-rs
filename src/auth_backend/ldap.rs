@@ -1,6 +1,6 @@
 use anyhow::{anyhow, bail, Result};
 use async_trait::async_trait;
-use ldap3::{ldap_escape, LdapConn, SearchEntry};
+use ldap3::{drive, ldap_escape, LdapConnAsync, SearchEntry};
 
 use crate::auth_backend::{AuthBackend, AuthCache, LoginType, UserInfo};
 use crate::config::config::Config;
@@ -26,13 +26,14 @@ impl AuthBackend for Ldap {
         Ok(LoginType::Mask)
     }
 
-    fn login(&self, username: &str, password: &str) -> Result<UserInfo> {
-        let mut ldap = LdapConn::new(self.config.uri.as_str())?;
+    async fn login(&self, username: &str, password: &str) -> Result<UserInfo> {
+        let (conn, mut ldap) = LdapConnAsync::new(self.config.uri.as_str()).await?;
 
+        drive!(conn);
         ldap.simple_bind(
             self.config.bind.as_str(),
             self.config.password.as_str(),
-        )?;
+        ).await?;
 
         let mut attrs = vec![CN_ATTR];
         if let Some(k) = &self.config.database_attribute {
@@ -53,8 +54,8 @@ impl AuthBackend for Ldap {
                 self.config.filter
             ).as_str(),
             attrs,
-        )?.success()?;
-        ldap.unbind()?;
+        ).await?.success()?;
+        ldap.unbind().await?;
 
         if results.is_empty() {
             bail!("no users found");
@@ -65,8 +66,8 @@ impl AuthBackend for Ldap {
         ldap.simple_bind(
             user.dn.as_str(),
             password,
-        )?.success()?;
-        ldap.unbind()?;
+        ).await?.success()?;
+        ldap.unbind().await?;
 
         let cn = user.attrs.get(CN_ATTR)
             .ok_or(anyhow!("CN attribute not found"))?;

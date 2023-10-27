@@ -23,7 +23,6 @@ humantime-serde = "1.1.1"
 postcard = { version = "1.0.8", features = ["use-std"] }
 env_logger = { version = "0.10.0", features = [] }
 log = "0.4.20"
-ldap3 = "0.11.3"
 rand = "0.8.5"
 keepass = { git = "https://github.com/lixmal/keepass-rs", features = ["serialization", "save_kdbx4"] }
 futures-util = "0.3.28"
@@ -42,6 +41,7 @@ openidconnect = "3.4.0"
 async-trait = "0.1.74"
 once_cell = "1.18.0"
 lazy_static = { version = "1.4.0", features = [] }
+ldap3 = { version = "0.11.3", default-features = false, features = ["tls-rustls"] }
 
 [dev-dependencies]
 clippy = "0.0.302"

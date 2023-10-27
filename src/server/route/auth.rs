@@ -60,7 +60,7 @@ async fn user_login(session: Session, config: Data<Config>, params: web::Form<Us
     }
 
     let auth_backend = auth_backend::new(&config);
-    let user_info = match auth_backend.login(params.username.as_str(), params.password.as_str()) {
+    let user_info = match auth_backend.login(params.username.as_str(), params.password.as_str()).await {
         Ok(user_info) => user_info,
         Err(err) => {
             info!("user login from '{}': {}", params.username, err);

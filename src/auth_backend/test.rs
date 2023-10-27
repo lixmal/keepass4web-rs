@@ -11,7 +11,7 @@ impl AuthBackend for Test {
         Ok(LoginType::Mask)
     }
 
-    fn login(&self, username: &str, password: &str) -> Result<UserInfo> {
+    async fn login(&self, username: &str, password: &str) -> Result<UserInfo> {
         if username == "test" && password == "test" {
             return Ok(
                 UserInfo {

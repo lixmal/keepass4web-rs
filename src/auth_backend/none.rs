@@ -11,7 +11,7 @@ impl AuthBackend for None {
         Ok(LoginType::None)
     }
 
-    fn login(&self, _: &str, _: &str) -> Result<UserInfo> {
+    async fn login(&self, _: &str, _: &str) -> Result<UserInfo> {
         Ok(
             UserInfo {
                 id: "".to_string(),

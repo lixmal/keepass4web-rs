@@ -65,7 +65,7 @@ pub trait AuthBackend: Send + Sync {
     fn get_logout_type(&self, _user_info: &UserInfo, _host: &str, _cache: &AuthCache) -> Result<LogoutType> { Ok(LogoutType::None) }
 
     //  TODO: handle case sensitivity
-    fn login(&self, _username: &str, _password: &str) -> Result<UserInfo> {
+    async fn login(&self, _username: &str, _password: &str) -> Result<UserInfo> {
         bail!("login method not supported")
     }
 

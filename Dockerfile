@@ -15,7 +15,7 @@ RUN npm run build
 COPY src src
 COPY Cargo.* ./
 
-RUN apk add --no-cache build-base libressl libressl-dev
+RUN apk add --no-cache build-base
 ENV RUSTFLAGS="-Ctarget-cpu=sandybridge -Ctarget-feature=+aes,+sse2,+sse4.1,+ssse3"
 RUN cargo build --bins --release
 
