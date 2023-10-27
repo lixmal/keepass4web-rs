@@ -4,7 +4,7 @@ import Timer from './Timer'
 import withNavigateHook from './nagivateHook'
 
 window.$ = window.jQuery = require('jquery')
-const Bootstrap = require('bootstrap')
+require('bootstrap')
 
 class NavBar extends React.Component {
     constructor(props) {
