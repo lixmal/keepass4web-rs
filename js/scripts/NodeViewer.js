@@ -1,5 +1,4 @@
 import React from 'react'
-import Clipboard from 'clipboard-polyfill/build/clipboard-polyfill.promise'
 import Classnames from 'classnames'
 
 import withNavigateHook from './nagivateHook'
@@ -70,7 +69,7 @@ class NodeViewer extends React.Component {
         let btn = event.currentTarget
         if (value == null)
             value = ''
-        Clipboard.writeText(value).then(
+        navigator.clipboard.writeText(value).then(
             function () {
                 this.showTooltip(btn, 'Copied')
             }.bind(this),
