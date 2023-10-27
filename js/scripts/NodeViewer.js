@@ -41,21 +41,21 @@ class NodeViewer extends React.Component {
 
     PWHandler(name, event) {
         let target = event.currentTarget
-        if (target.childNodes[0].className == 'glyphicon glyphicon-eye-close') {
+        if (target.childNodes[0].className === 'glyphicon glyphicon-eye-close') {
             this.setHide(target, true, name)
             return
         }
 
         // else true:
         event.persist()
-        this.serverRequest = KeePass4Web.ajax('get_protected', {
+        this.serverRequest = KeePass4Web.fetch('get_protected', {
             method: 'GET',
             data: {
                 entry_id: this.props.entry.id,
                 name: name
             },
             success: function (data) {
-                this.setHide(target, false, name, data.data)
+                this.setHide(target, false, name, data)
 
                 // hide password after X seconds
                 setTimeout(this.PWTimeout.bind(this, target, name), this.props.timeoutSec)
@@ -69,29 +69,26 @@ class NodeViewer extends React.Component {
         let btn = event.currentTarget
         if (value == null)
             value = ''
-        navigator.clipboard.writeText(value).then(
-            function () {
-                this.showTooltip(btn, 'Copied')
-            }.bind(this),
-            function () {
+        navigator.clipboard.writeText(value).then(function () {
+            this.showTooltip(btn, 'Copied')
+        }.bind(this))
+            .catch(function () {
                 this.showTooltip(btn, 'Failed to copy')
-            }.bind(this),
-        )
+            }.bind(this))
     }
 
     copyPWHandler(name, event) {
+        event.persist()
         let target = event.currentTarget.previousSibling
 
-        this.serverRequest = KeePass4Web.ajax('get_protected', {
+        this.serverRequest = KeePass4Web.fetch('get_protected', {
             method: 'GET',
             data: {
                 entry_id: this.props.entry.id,
                 name: name
             },
-            // need same thread here, else copy won't work by browser restrictions
-            async: false,
             success: function (data) {
-                this.copyHandler(data.data, event)
+                this.copyHandler(data, event)
             }.bind(this),
             error: KeePass4Web.error.bind(this),
         })

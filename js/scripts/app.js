@@ -1,4 +1,3 @@
-import jQuery from 'jquery'
 import '../style/app.css'
 import React from 'react'
 import ReactDOM from 'react-dom'
@@ -11,22 +10,29 @@ import UserLogin from './UserLogin'
 import BackendLogin from './BackendLogin'
 import DBLogin from './DBLogin'
 import CallbackUserAuth from './CallbackUserAuth'
-
+import HTTPError from "./HTTPError"
 
 // global namespace
 window.KeePass4Web = {}
 
 KeePass4Web.checkAuth = function (state) {
-    return KeePass4Web.ajax('authenticated', {
+    return KeePass4Web.fetch('authenticated', {
         method: "GET",
         success: function () {
             this.props.navigate('/keepass', {replace: true})
         }.bind(this),
-        error: function (r, s, e) {
-            if (r.status != 200 && r.status != 401)
-                return KeePass4Web.error(r, s, e)
+        error: function (error) {
+            if (error.name === 'AbortError')
+                return
 
-            let authData = r.responseJSON && r.responseJSON.data
+            if (error instanceof HTTPError) {
+                if (error.status !== 401)
+                    return KeePass4Web.error(error)
+            } else {
+                return KeePass4Web.error(error)
+            }
+
+            let authData = error.data
 
             // route to proper login page if unauthenticated
             // in that order
@@ -63,20 +69,58 @@ KeePass4Web.checkAuth = function (state) {
 }
 
 // simple wrapper for ajax calls, in case implementation changes
-KeePass4Web.ajax = function (url, conf) {
-    conf.url = `api/v1/${url}`
+KeePass4Web.fetch = function (url, conf) {
+    url = `api/v1/${url}`
 
     // set defaults
-    conf.method = typeof conf.method === 'undefined' ? 'POST' : conf.method
-    conf.dataType = typeof conf.dataType === 'undefined' ? 'json' : conf.dataType
+    if (typeof conf.method === 'undefined')
+        conf.method = "POST"
 
-    if (typeof conf.headers === 'undefined') {
-        conf.headers = {}
+    conf.headers = {
+        'Accept': 'application/json',
     }
-    conf.headers['X-CSRF-Token'] = KeePass4Web.getCSRFToken()
 
+    const csrf_token = KeePass4Web.getCSRFToken()
+    if (csrf_token)
+        conf.headers['X-CSRF-Token'] = csrf_token
+
+    const controller = new AbortController()
+    conf.signal = controller.signal
     KeePass4Web.restartTimer(true)
-    return jQuery.ajax(conf)
+
+
+    if (conf.data) {
+        let params = new URLSearchParams(Object.entries(conf.data)).toString();
+        if (conf.method === "GET") {
+            url = `${url}?${params}`
+        } else {
+            conf.headers['Content-Type'] = 'application/x-www-form-urlencoded'
+            conf.body = params
+        }
+    }
+
+    fetch(url, conf).then(async function (response) {
+        let message, data
+        try {
+            let json = await response.clone().json()
+            message = json.message
+            data = json.data
+        } catch (e) {
+            try {
+                message = await response.text()
+            } catch (e) {
+                message = new Error("failed to read reponse")
+            }
+        }
+
+        if (!response.ok) {
+            throw new HTTPError(response, message, data)
+        }
+
+        conf.success && conf.success(data)
+    }).catch(conf.error).finally(conf.complete)
+
+    return controller
 }
 
 // leave room for implementation changes
@@ -114,11 +158,12 @@ KeePass4Web.restartTimer = function (val) {
     return KeePass4Web.timer
 }
 
-KeePass4Web.error = function (r, s, e) {
+KeePass4Web.error = function (error) {
     // ignore aborted requests
-    if (e === 'abort')
+    if (error.name === 'AbortError')
         return
-    if (r.status == 401) {
+
+    if (error instanceof HTTPError && error.status === 401) {
         if (this.props.navigate) {
             this.props.navigate('/', {
                 state: {
@@ -128,20 +173,19 @@ KeePass4Web.error = function (r, s, e) {
             })
         } else {
             alert('The session expired')
-            window.location.reload()
+            window.location = '/'
         }
+        return
+
+    }
+
+    // disable remaining loading masks
+    if (this.state && typeof this.state.error !== 'undefined') {
+        this.setState({
+            error: error.toString()
+        })
     } else {
-        let error = e
-        if (r.responseJSON)
-            error = r.responseJSON.message
-        // disable remaining loading masks
-        if (this.state) {
-            this.setState({
-                groupMask: false,
-                nodeMask: false,
-            })
-        }
-        alert(error)
+        alert(error.toString())
     }
 }
 

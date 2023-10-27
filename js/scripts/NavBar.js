@@ -15,10 +15,9 @@ class NavBar extends React.Component {
     }
 
     onLogout() {
-        this.serverRequest = KeePass4Web.ajax('logout', {
+        this.serverRequest = KeePass4Web.fetch('logout', {
             success: function (data) {
                 KeePass4Web.clearStorage()
-                data = data && data.data
                 if (data && data.type === 'redirect' && data.url) {
                     window.location = data.url
                 } else {
@@ -30,7 +29,7 @@ class NavBar extends React.Component {
     }
 
     onCloseDB(event, state) {
-        this.serverRequest = KeePass4Web.ajax('close_db', {
+        this.serverRequest = KeePass4Web.fetch('close_db', {
             success: function () {
                 // redirect to home, so checks for proper login can be made
                 this.props.navigate('/', {state: state, replace: true})

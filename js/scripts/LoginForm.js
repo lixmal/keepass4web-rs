@@ -51,24 +51,17 @@ export default class LoginForm extends React.Component {
             error: null,
             mask: true
         })
-        this.serverRequest = KeePass4Web.ajax(this.url, {
+        this.serverRequest = KeePass4Web.fetch(this.url, {
             success: function (data) {
-                if (data && data.data) {
-                    KeePass4Web.setCSRFToken(data.data.csrf_token)
-                    KeePass4Web.setSettings(data.data.settings)
+                if (data) {
+                    KeePass4Web.setCSRFToken(data.csrf_token)
+                    KeePass4Web.setSettings(data.settings)
                 }
             }.bind(this),
             data: this.transformRefs(this.refs),
-            error: function (r, s, e) {
-                var errmsg = s
-
-                // error code sent by server
-                if (s == 'error' && r.responseJSON) {
-                    errmsg = r.responseJSON.message
-                }
-
+            error: function (error) {
                 this.setState({
-                    error: errmsg,
+                    error: error.toString(),
                     mask: false
                 })
             }.bind(this),

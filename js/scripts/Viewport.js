@@ -39,20 +39,24 @@ class Viewport extends React.Component {
             groupMask: true,
         })
 
-        this.serverRequest = KeePass4Web.ajax('get_group_entries', {
+        this.serverRequest = KeePass4Web.fetch('get_group_entries', {
             method: "GET",
             data: {
                 id: group.id,
             },
             success: function (data) {
                 this.setState({
-                    group: data.data,
-                    groupMask: false,
+                    group: data,
                 })
 
                 this.scroll('group-viewer')
             }.bind(this),
             error: KeePass4Web.error.bind(this),
+            complete: function () {
+                this.setState({
+                    groupMask: false,
+                })
+            }.bind(this)
         })
     }
 
@@ -67,7 +71,7 @@ class Viewport extends React.Component {
         this.setState({
             nodeMask: true,
         })
-        this.serverRequest = KeePass4Web.ajax('get_entry', {
+        this.serverRequest = KeePass4Web.fetch('get_entry', {
             method: "GET",
             data: {
                 id: entry.id,
@@ -79,13 +83,17 @@ class Viewport extends React.Component {
                     entry: null,
                 })
                 this.setState({
-                    entry: data.data,
-                    nodeMask: false,
+                    entry: data,
                 })
 
                 this.scroll('node-viewer')
             }.bind(this),
             error: KeePass4Web.error.bind(this),
+            complete: function () {
+                this.setState({
+                    nodeMask: false,
+                })
+            }.bind(this)
         })
     }
 
@@ -100,34 +108,39 @@ class Viewport extends React.Component {
             groupMask: true,
         })
 
-        this.serverRequest = KeePass4Web.ajax('search_entries', {
+        this.serverRequest = KeePass4Web.fetch('search_entries', {
             method: "GET",
             data: {
                 term: refs.term.value.replace(/^\s+|\s+$/g, ''),
             },
             success: function (data) {
                 this.setState({
-                    group: data.data,
+                    group: data,
                     groupMask: false,
                 })
 
                 this.scroll('group-viewer')
             }.bind(this),
             error: KeePass4Web.error.bind(this),
+            complete: function () {
+                this.setState({
+                    groupMask: false,
+                })
+            }.bind(this)
         })
     }
 
     componentDidMount() {
         // TODO: add loading mask for the whole viewport while fetching groups
-        KeePass4Web.ajax('get_groups', {
+        KeePass4Web.fetch('get_groups', {
             method: "GET",
             success: function (data) {
                 this.setState({
-                    tree: data.data.groups
+                    tree: data.groups
                 })
-                if (data.data.last_selected)
+                if (data.last_selected)
                     this.onGroupSelect({
-                        id: data.data.last_selected
+                        id: data.last_selected
                     })
             }.bind(this),
             error: KeePass4Web.error.bind(this),
