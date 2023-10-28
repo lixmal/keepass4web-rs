@@ -86,8 +86,11 @@ impl KeePass {
         let mut buf = vec![];
         db_read.read_to_end(&mut buf).await?;
 
-        let db = Database::open(&mut buf.as_slice(), db_key)?;
-        buf.zeroize();
+        let db = tokio::task::spawn_blocking(move || {
+            let db = Database::open(&mut buf.as_slice(), db_key);
+            buf.zeroize();
+            db
+        }).await??;
 
         Ok(
             KeePass {
@@ -102,9 +105,12 @@ impl KeePass {
         let key = Self::db_key_from_params(db_backend, params, user_info).await?;
         let mut db_write = db_backend.get_db_write(user_info).await?;
 
-
         let mut buf: Vec<u8> = vec![];
-        self.db.save(&mut buf, key)?;
+        let (result, mut buf) = tokio::task::spawn_blocking(move || {
+            (self.db.save(&mut buf, key), buf)
+        }).await?;
+        result?;
+
         tokio::io::copy(&mut buf.as_slice(), &mut db_write).await?;
         buf.zeroize();
 
