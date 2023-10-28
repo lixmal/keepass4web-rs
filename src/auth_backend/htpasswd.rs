@@ -35,6 +35,10 @@ impl Htpasswd {
 
 #[async_trait]
 impl AuthBackend for Htpasswd {
+    fn validate_config(&self) -> Result<()> {
+        self.config.validate()
+    }
+
     fn get_login_type(&self, _: &str, _: &AuthCache) -> Result<LoginType> {
         Ok(LoginType::Mask)
     }
