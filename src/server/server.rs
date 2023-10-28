@@ -13,7 +13,7 @@ use crate::server::route::setup_routes;
 pub struct Server;
 
 impl Server {
-    pub async fn new(config: Config) -> Result<actix_server::Server> {
+    pub async fn new(config: Config) -> Result<()> {
         let server = config.listen.clone();
         let port = config.port;
         env_logger::init_from_env(Env::default().default_filter_or("info"));
@@ -23,7 +23,7 @@ impl Server {
         let auth_cache = web::Data::new(auth_backend::new(&config_data).init().await?);
         let db_cache = web::Data::new(DbCache::default());
 
-        let server = HttpServer::new(move || {
+        HttpServer::new(move || {
             App::new()
                 .app_data(db_cache.clone())
                 .app_data(auth_cache.clone())
@@ -46,8 +46,9 @@ impl Server {
                 )
                 .wrap(Logger::default())
                 .configure(setup_routes)
-        }).bind((server, port))?.run();
-
-        Ok(server)
+        }).bind((server, port))?
+            .run()
+            .await
+            .map_err(anyhow::Error::new)
     }
 }
