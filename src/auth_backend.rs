@@ -5,6 +5,7 @@ use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use url::Url;
 
+use crate::auth_backend::htpasswd::Htpasswd;
 use crate::auth_backend::ldap::Ldap;
 use crate::auth_backend::none::None;
 use crate::auth_backend::oidc::Oidc;
@@ -16,6 +17,7 @@ pub mod test;
 pub mod ldap;
 pub mod none;
 pub mod oidc;
+pub mod htpasswd;
 
 pub const SESSION_KEY_AUTH_STATE: &str = "auth_state";
 pub const ROUTE_CALLBACK_USER_AUTH: &str = "/callback_user_auth";
@@ -80,5 +82,6 @@ pub fn new(config: &Config) -> Box<dyn AuthBackend> {
         backend::AuthBackend::Test => Box::new(Test {}),
         backend::AuthBackend::Ldap => Box::new(Ldap::new(config)),
         backend::AuthBackend::Oidc => Box::new(Oidc::new(config)),
+        backend::AuthBackend::Htpasswd => Box::new(Htpasswd::new(config)),
     }
 }

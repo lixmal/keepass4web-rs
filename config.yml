@@ -3,11 +3,11 @@
 ##################################
 
 # where to get keepass database from
-# available: Filesystem, Http
+# available: Filesystem, HTTP
 db_backend: 'Filesystem'
 
 # backend to authenticate users before anything else
-# available: None, LDAP, OIDC
+# available: None, LDAP, OIDC, htpasswd
 # None is only useful in single-user environments
 auth_backend: 'None'
 
@@ -19,8 +19,8 @@ Filesystem:
     # optional, storing key files on the filesystem is not recommended
     # keyfile_location: './db.key'
 
-# http specific configuration, db_backend = 'Http'
-Http:
+# http specific configuration, db_backend = 'HTTP'
+HTTP:
     # database_url: ''
     # keyfile_url: ''
     # credentials:
@@ -66,6 +66,10 @@ OIDC:
       # scope containing the keepass_location and/or keyfile_location claims for the authed user
       # leave commented out to use static db/keyfile location from db backend
       # - 'keepass'
+
+# htpasswd specific configuration, auth_backend = 'htpasswd'
+htpasswd:
+    path: '.htpasswd'
 
 # time till database gets closed (user idle time)
 # user will have to reenter database password/keyfile

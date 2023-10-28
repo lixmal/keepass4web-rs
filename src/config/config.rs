@@ -11,6 +11,7 @@ use crate::{auth_backend, db_backend};
 use crate::config::backend::{AuthBackend, DbBackend};
 use crate::config::cookie::SameSiteDef;
 use crate::config::filesystem::Filesystem;
+use crate::config::htpasswd::Htpasswd;
 use crate::config::http::Http;
 use crate::config::key::Key;
 use crate::config::ldap::Ldap;
@@ -39,6 +40,8 @@ pub struct Config {
     pub ldap: Ldap,
     #[serde(alias = "OIDC", alias = "Oidc")]
     pub oidc: Oidc,
+    #[serde(alias = "Htpasswd")]
+    pub htpasswd: Htpasswd,
     #[serde(alias = "Filesystem")]
     pub filesystem: Filesystem,
     #[serde(alias = "HTTP", alias = "Http")]
@@ -63,6 +66,7 @@ impl Default for Config {
             search: Default::default(),
             ldap: Default::default(),
             oidc: Default::default(),
+            htpasswd: Default::default(),
             filesystem: Default::default(),
             http: Default::default(),
         }

@@ -7,15 +7,19 @@ pub enum AuthBackend {
     Test,
     #[serde(alias = "LDAP", alias = "ldap")]
     Ldap,
-    #[serde(alias = "OIDC", alias = "Oidc")]
+    #[serde(alias = "OIDC", alias = "oidc")]
     Oidc,
+    #[serde(alias = "htpasswd")]
+    Htpasswd,
 }
 
 #[derive(Clone, Default, Deserialize)]
 pub enum DbBackend {
     Test,
     #[default]
+    #[serde(alias = "filesystem")]
     Filesystem,
+    #[serde(alias = "HTTP", alias = "http")]
     Http,
 }
 

@@ -60,6 +60,7 @@ async fn user_login(session: Session, config: Data<Config>, params: web::Form<Us
     }
 
     let auth_backend = auth_backend::new(&config);
+    // TODO: differentiate between real error and login failed
     let user_info = match auth_backend.login(params.username.as_str(), params.password.as_str()).await {
         Ok(user_info) => user_info,
         Err(err) => {

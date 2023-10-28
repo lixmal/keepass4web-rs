@@ -7,3 +7,4 @@ pub mod search;
 pub mod oidc;
 pub mod cookie;
 pub mod http;
+pub mod htpasswd;
