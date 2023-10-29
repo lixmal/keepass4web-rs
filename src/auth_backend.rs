@@ -24,7 +24,7 @@ pub const ROUTE_CALLBACK_USER_AUTH: &str = "/callback_user_auth";
 
 pub type AuthCache = Box<dyn Any + Send + Sync>;
 
-#[derive(Serialize, Deserialize)]
+#[derive(Default, Serialize, Deserialize)]
 pub struct UserInfo {
     pub id: String,
     pub name: String,

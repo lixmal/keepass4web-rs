@@ -3,11 +3,14 @@ use std::pin::Pin;
 use std::str::FromStr;
 
 use anyhow::{bail, Result};
+use anyhow::Error;
 use async_trait::async_trait;
 use futures_util::TryStreamExt;
 use reqwest;
-use reqwest::{Client, Method, RequestBuilder, Response};
+use reqwest::{Body, Client, Method, RequestBuilder, Response};
 use tokio::io::{AsyncRead, AsyncWrite};
+use tokio::sync::oneshot;
+use tokio::sync::oneshot::Receiver;
 use tokio_util::compat::FuturesAsyncReadCompatExt;
 use url::Url;
 
@@ -67,8 +70,31 @@ impl DbBackend for Http {
         }
     }
 
-    async fn get_db_write(&mut self, _user_info: &UserInfo) -> Result<Pin<Box<dyn AsyncWrite + '_>>> {
-        unimplemented!()
+    async fn get_db_write(&mut self, user_info: &UserInfo) -> Result<(Pin<Box<dyn AsyncWrite + '_>>, Option<Receiver<Result<()>>>)> {
+        let url = self.get_db_url(user_info)?;
+
+        let (asyncwriter, asyncreader) = tokio::io::duplex(256 * 1024);
+        let streamreader = tokio_util::io::ReaderStream::new(asyncreader);
+
+        let req = self.get_request(Method::PUT, url)?
+            .body(Body::wrap_stream(streamreader));
+
+        let (tx, rx) = oneshot::channel();
+        tokio::spawn(async move {
+            tx.send(match req.send().await {
+                Ok(_) => Ok(()),
+                Err(err) => Err(err).map_err(Error::new),
+            }) // ignore failed send
+        });
+
+        Ok(
+            (
+                Box::pin(
+                    asyncwriter
+                ),
+                Some(rx)
+            )
+        )
     }
 
     fn as_any(&mut self) -> &mut dyn Any {
@@ -125,3 +151,73 @@ impl Http {
         )
     }
 }
+
+
+#[cfg(test)]
+mod tests {
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+    use super::*;
+
+    async fn write_http(url: Url) -> Result<()> {
+        let mut config = Config::default();
+        config.http.database_url = Some(url);
+        let mut http = Http::new(&config);
+
+        let (mut writer, rx) = http.get_db_write(&UserInfo::default()).await?;
+
+        let data = "some random data";
+        writer.write_all(data.as_bytes()).await?;
+        writer.shutdown().await?;
+
+        if let Some(rx) = rx {
+            rx.await??
+        }
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn read_ok() {
+        let data = "some random data";
+
+        let mut server = mockito::Server::new_async().await;
+        let mock = server.mock("GET", "/")
+            .with_body(data)
+            .with_status(200)
+            .create_async().await;
+
+        let mut config = Config::default();
+        config.http.database_url = Some(Url::from_str(&server.url()).unwrap());
+        let http = Http::new(&config);
+        let mut reader = http.get_db_read(&UserInfo::default()).await.unwrap();
+
+        let mut str = String::new();
+        reader.read_to_string(&mut str).await.unwrap();
+
+        mock.assert_async().await;
+
+        assert_eq!(data, &str);
+    }
+
+    #[tokio::test]
+    async fn write_ok() {
+        let mut server = mockito::Server::new_async().await;
+        let mock = server.mock("PUT", "/")
+            .match_body("some random data")
+            .with_status(201)
+            .create_async().await;
+
+        write_http(Url::from_str(&server.url()).unwrap()).await.unwrap();
+
+        mock.assert_async().await;
+    }
+
+    #[tokio::test]
+    async fn write_fail() {
+        let res = write_http(Url::from_str("http://0.0.0.0").unwrap()).await;
+
+        assert!(res.is_err());
+    }
+}
+

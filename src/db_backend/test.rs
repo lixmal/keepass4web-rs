@@ -4,6 +4,7 @@ use std::pin::Pin;
 use anyhow::Result;
 use async_trait::async_trait;
 use tokio::io::{AsyncRead, AsyncWrite};
+use tokio::sync::oneshot::Receiver;
 
 use crate::auth_backend::UserInfo;
 use crate::db_backend::DbBackend;
@@ -26,9 +27,12 @@ impl DbBackend for Test {
         None
     }
 
-    async fn get_db_write(&mut self, _user_info: &UserInfo) -> Result<Pin<Box<dyn AsyncWrite + '_>>> {
+    async fn get_db_write(&mut self, _user_info: &UserInfo) -> Result<(Pin<Box<dyn AsyncWrite + '_>>, Option<Receiver<Result<()>>>)> {
         Ok(
-            Box::pin(&mut self.buf)
+            (
+                Box::pin(&mut self.buf),
+                None
+            )
         )
     }
 

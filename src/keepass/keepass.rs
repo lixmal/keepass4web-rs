@@ -9,7 +9,7 @@ use keepass::db::{Icon, Node, Value};
 use regex::Regex;
 use secrecy::{ExposeSecret, SecretString};
 use serde::Deserialize;
-use tokio::io::AsyncReadExt;
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use uuid::Uuid;
 use zeroize::Zeroize;
 
@@ -80,11 +80,11 @@ impl KeePass {
     pub async fn from_backend(config: &Config, db_backend: &dyn DbBackend, params: &DbLogin, user_info: &UserInfo) -> Result<Self> {
         let db_key = Self::db_key_from_params(db_backend, params, user_info).await?;
 
-        let mut db_read = db_backend.get_db_read(user_info).await?;
+        let mut reader = db_backend.get_db_read(user_info).await?;
 
         // bridge sync and async by caching the whole file in memory for now
         let mut buf = vec![];
-        db_read.read_to_end(&mut buf).await?;
+        reader.read_to_end(&mut buf).await?;
 
         let db = tokio::task::spawn_blocking(move || {
             let db = Database::open(&mut buf.as_slice(), db_key);
@@ -103,7 +103,6 @@ impl KeePass {
     #[allow(dead_code)]
     pub async fn to_backend(self, db_backend: &mut dyn DbBackend, params: &DbLogin, user_info: &UserInfo) -> Result<()> {
         let key = Self::db_key_from_params(db_backend, params, user_info).await?;
-        let mut db_write = db_backend.get_db_write(user_info).await?;
 
         let mut buf: Vec<u8> = vec![];
         let (result, mut buf) = tokio::task::spawn_blocking(move || {
@@ -111,8 +110,16 @@ impl KeePass {
         }).await?;
         result?;
 
-        tokio::io::copy(&mut buf.as_slice(), &mut db_write).await?;
+        let (mut writer, rx) = db_backend.get_db_write(user_info).await?;
+        writer.write_all(&buf).await?;
         buf.zeroize();
+
+        // close our side to signal end of data
+        // otherwise we could get a deadlock awaiting the channel
+        writer.shutdown().await?;
+        if let Some(rx) = rx {
+            rx.await??;
+        }
 
         Ok(())
     }
@@ -341,7 +348,7 @@ mod tests {
 
     use super::*;
 
-    #[actix_web::test]
+    #[tokio::test]
     async fn database_roundtrip() {
         let params = DbLogin {
             password: Some("test".to_string()),
@@ -354,13 +361,7 @@ mod tests {
         let test_backend: &mut Test = db_backend.as_any().downcast_mut().unwrap();
         test_backend.buf.extend_from_slice(&fs::read("tests/test.kdbx").await.unwrap());
 
-        let user_info = UserInfo {
-            id: "".to_string(),
-            name: "".to_string(),
-            db_location: None,
-            keyfile_location: None,
-            additional_data: None,
-        };
+        let user_info = UserInfo::default();
         let keepass = KeePass::from_backend(&config, test_backend, &params, &user_info).await.unwrap();
 
         let (mut key, enc) = keepass.to_enc().unwrap();

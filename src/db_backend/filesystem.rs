@@ -6,6 +6,7 @@ use anyhow::Result;
 use async_trait::async_trait;
 use tokio::fs::File;
 use tokio::io::{AsyncRead, AsyncWrite};
+use tokio::sync::oneshot::Receiver;
 
 use crate::auth_backend::UserInfo;
 use crate::config::config::Config;
@@ -57,7 +58,7 @@ impl DbBackend for Filesystem {
         None
     }
 
-    async fn get_db_write(&mut self, user_info: &UserInfo) -> Result<Pin<Box<dyn AsyncWrite + '_>>> {
+    async fn get_db_write(&mut self, user_info: &UserInfo) -> Result<(Pin<Box<dyn AsyncWrite + '_>>, Option<Receiver<Result<()>>>)> {
         let mut path = self.config.db_location.as_path();
 
         if let Some(db_location) = &user_info.db_location {
@@ -65,9 +66,12 @@ impl DbBackend for Filesystem {
         }
 
         Ok(
-            Box::pin(File::open(
-                path
-            ).await?),
+            (
+                Box::pin(File::open(
+                    path
+                ).await?),
+                None
+            )
         )
     }
 
