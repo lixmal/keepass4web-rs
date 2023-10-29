@@ -78,7 +78,7 @@ impl KeePass {
     }
 
     pub async fn from_backend(config: &Config, db_backend: &dyn DbBackend, params: &DbLogin, user_info: &UserInfo) -> Result<Self> {
-        let db_key = Self::db_key_from_params(db_backend, &params, user_info).await?;
+        let db_key = Self::db_key_from_params(db_backend, params, user_info).await?;
 
         let mut db_read = db_backend.get_db_read(user_info).await?;
 

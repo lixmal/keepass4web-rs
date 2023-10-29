@@ -90,7 +90,7 @@ async fn user_login(session: Session, config: Data<Config>, params: web::Form<Us
         {
             "success": true,
             "data": SessionData {
-                csrf_token: csrf_token,
+                csrf_token,
                 settings: Settings {
                     cn: user_info.name,
                     timeout: config.db_session_timeout.as_secs(),

@@ -56,7 +56,7 @@ impl DbBackend for Http {
 
         let request = match self.get_request(Method::GET, url) {
             Ok(v) => v,
-            Err(err) => return Some(Err(err.into()))
+            Err(err) => return Some(Err(err))
         };
 
         match request.send().await {
