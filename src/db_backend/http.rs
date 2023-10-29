@@ -27,7 +27,7 @@ impl DbBackend for Http {
     }
 
     async fn get_db_read(&self, user_info: &UserInfo) -> Result<Pin<Box<dyn AsyncRead + '_>>> {
-        let url = self.get_db_url(&user_info)?;
+        let url = self.get_db_url(user_info)?;
 
         let response = self.get_request(Method::GET, url)?.send().await?;
         Ok(
@@ -95,7 +95,7 @@ impl Http {
         )
     }
 
-    fn get_db_url(&self, user_info: &&UserInfo) -> Result<Url> {
+    fn get_db_url(&self, user_info: &UserInfo) -> Result<Url> {
         let url;
         if let Some(u) = &user_info.db_location {
             url = Url::from_str(u)?;
