@@ -22,7 +22,7 @@ serde_millis = "0.1.1"
 base64 = "0.21.5"
 humantime-serde = "1.1.1"
 postcard = { version = "1.0.8", features = ["use-std"] }
-env_logger = { version = "0.10.0", features = [] }
+env_logger = { version = "0.10.1", features = [] }
 log = "0.4.20"
 rand = "0.8.5"
 keepass = { git = "https://github.com/lixmal/keepass-rs", features = ["serialization", "save_kdbx4"] }
