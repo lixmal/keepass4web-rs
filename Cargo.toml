@@ -28,7 +28,7 @@ rand = "0.8.5"
 keepass = { git = "https://github.com/lixmal/keepass-rs", features = ["serialization", "save_kdbx4"] }
 zeroize = { version = "1.7.0", features = ["derive", "std"] }
 secrecy = "0.8.0"
-uuid = { version = "1.5.0", features = ["v4"] }
+uuid = { version = "1.6.0", features = ["v4"] }
 regex = "1.10.2"
 mime = "0.3.17"
 aes-gcm = { version = "0.10.3", features = ["zeroize", "std"] }
