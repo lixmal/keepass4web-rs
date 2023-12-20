@@ -21,7 +21,7 @@
         "url": "https://github.com/lixmal/keepass4web-rs/issues"
     },
     "devDependencies": {
-        "@babel/core": "^7.23.5",
+        "@babel/core": "^7.23.6",
         "@babel/preset-env": "^7.23.6",
         "@babel/preset-react": "^7.23.3",
         "babelify": "^10.0.0",
