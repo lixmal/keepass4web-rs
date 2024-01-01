@@ -36,7 +36,7 @@ constant_time_eq = "0.3.0"
 linux-keyutils = { version = "0.2.3", features = ["std"] }
 url = { version = "2.5.0", features = ["serde"] }
 openidconnect = "3.4.0"
-async-trait = "0.1.75"
+async-trait = "0.1.76"
 ldap3 = { version = "0.11.3", default-features = false, features = ["tls-rustls"] }
 reqwest = { version = "0.11.23", features = ["rustls", "__tls", "rustls-tls", "stream", "webpki-roots", "rustls-tls-webpki-roots"], default-features = false }
 futures = "0.3.29"
