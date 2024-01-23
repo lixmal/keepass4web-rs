@@ -36,7 +36,7 @@
         "jquery": "^3.7.1",
         "react": "^16.0.0",
         "react-dom": "^16.0.0",
-        "react-router-dom": "^6.21.1"
+        "react-router-dom": "^6.21.3"
     },
     "browserify-css": {
         "autoInject": true,
