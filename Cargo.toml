@@ -39,7 +39,7 @@ openidconnect = "3.4.0"
 async-trait = "0.1.75"
 ldap3 = { version = "0.11.3", default-features = false, features = ["tls-rustls"] }
 reqwest = { version = "0.11.23", features = ["rustls", "__tls", "rustls-tls", "stream", "webpki-roots", "rustls-tls-webpki-roots"], default-features = false }
-futures = "0.3.29"
+futures = "0.3.30"
 futures-util = { version = "0.3.30", default-features = false, features = ["io"] }
 htpasswd-verify = { git = "https://github.com/twistedfall/htpasswd-verify", rev = "ff14703083cbd639f7d05622b398926f3e718d61" }
 
