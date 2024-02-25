@@ -131,6 +131,35 @@ async fn get_protected(session: Session, config: Data<Config>, db_cache: Data<Db
     ))
 }
 
+#[get("/get_otp")]
+async fn get_otp(session: Session, config: Data<Config>, db_cache: Data<DbCache>, params: web::Query<Id>) -> impl Responder {
+    let keepass = match util::get_db(&session, &config, &db_cache).await {
+        Ok(v) => v,
+        Err(err) => return err,
+    };
+
+    let username = session.get_user_id();
+    let otp = match keepass.get_otp(&params) {
+        Ok(v) => v,
+        Err(err) => {
+            info!("{}: failed to get otp of entry '{}': {}", username, params.id, err);
+            return HttpResponse::InternalServerError().json(json!(
+                {
+                    "success": false,
+                    "message": "failed to get otp field",
+                }
+            ));
+        }
+    };
+
+    HttpResponse::Ok().json(json!(
+        {
+            "success": true,
+            "data": otp,
+        }
+    ))
+}
+
 #[get("/get_file")]
 async fn get_file(session: Session, config: Data<Config>, db_cache: Data<DbCache>, params: web::Query<File>) -> impl Responder {
     let keepass = match util::get_db(&session, &config, &db_cache).await {

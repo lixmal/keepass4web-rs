@@ -37,6 +37,7 @@ pub struct Entry {
     pub icon: Option<usize>,
     pub custom_icon_uuid: Option<Uuid>,
     pub url: Option<String>,
+    pub otp: bool,
     pub strings: Option<HashMap<String, Option<String>>>,
 }
 
@@ -60,6 +61,7 @@ impl From<&keepass::db::Entry> for Entry {
         }
         strings.remove("Password");
 
+
         // TODO: Don't hide empty protected strings
         Entry {
             id: entry.uuid,
@@ -72,6 +74,7 @@ impl From<&keepass::db::Entry> for Entry {
             icon: entry.icon_id,
             custom_icon_uuid: entry.custom_icon_uuid,
             url: strings.remove("URL").flatten(),
+            otp: strings.remove("otp").flatten().is_some(),
             strings: Some(strings),
         }
     }

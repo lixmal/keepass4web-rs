@@ -42,6 +42,7 @@ reqwest = { version = "0.11.25", features = ["rustls", "__tls", "rustls-tls", "s
 futures = "0.3.30"
 futures-util = { version = "0.3.30", default-features = false, features = ["io"] }
 htpasswd-verify = { git = "https://github.com/twistedfall/htpasswd-verify", rev = "ff14703083cbd639f7d05622b398926f3e718d61" }
+totp-rs = { version = "5.4.0", features = ["otpauth", "zeroize"] }
 
 [dev-dependencies]
 clippy = "0.0.302"

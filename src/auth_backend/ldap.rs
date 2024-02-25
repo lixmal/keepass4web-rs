@@ -1,4 +1,4 @@
-use anyhow::{anyhow, bail, Result};
+use anyhow::{anyhow, bail, Context, Result};
 use async_trait::async_trait;
 use ldap3::{drive, ldap_escape, LdapConnAsync, SearchEntry};
 

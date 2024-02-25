@@ -8,8 +8,10 @@ use keepass::{Database, DatabaseKey};
 use keepass::db::{Icon, Node, Value};
 use regex::Regex;
 use secrecy::{ExposeSecret, SecretString};
-use serde::Deserialize;
+use serde::__private::from_utf8_lossy;
+use serde::{Deserialize, Serialize};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use totp_rs::TOTP;
 use uuid::Uuid;
 use zeroize::Zeroize;
 
@@ -51,6 +53,12 @@ pub struct SearchTerm {
 pub struct KeePass {
     config: Config,
     db: Database,
+}
+
+#[derive(Serialize)]
+pub struct Totp {
+    token: String,
+    ttl: u64,
 }
 
 
@@ -188,6 +196,7 @@ impl KeePass {
                         icon: entry.icon_id,
                         custom_icon_uuid: entry.custom_icon_uuid,
                         url: entry.get_url().map(String::from),
+                        otp: false,
                     }
                 )
             }
@@ -227,6 +236,28 @@ impl KeePass {
             SecretString::new(
                 String::from_utf8_lossy(protected.unsecure()).to_string()
             )
+        )
+    }
+
+    pub fn get_otp(&self, params: &Query<Id>) -> Result<Totp> {
+        let entry = Self::find_entry_by_id(&self.db.root, &params.id).ok_or(anyhow!("entry not found"))?;
+
+        let otp = match entry.fields.get("otp") {
+            Some(v) => match v {
+                Value::Unprotected(u) => u.clone(),
+                Value::Protected(p) => from_utf8_lossy(p.unsecure()).to_string(),
+                Value::Bytes(b) => from_utf8_lossy(b).to_string(),
+            },
+            None => bail!("otp not found"),
+        };
+
+        let totp = TOTP::from_url(&otp)?;
+
+        Ok(
+            Totp {
+                token: totp.generate_current()?,
+                ttl: totp.ttl()?,
+            }
         )
     }
 

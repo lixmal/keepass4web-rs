@@ -11,15 +11,7 @@ use crate::server::route::auth::{
     logout,
     user_login,
 };
-use crate::server::route::keepass::{
-    get_entry,
-    get_file,
-    get_group_entries,
-    get_groups,
-    get_icon,
-    get_protected,
-    search_entries,
-};
+use crate::server::route::keepass::{get_entry, get_file, get_group_entries, get_groups, get_icon, get_otp, get_protected, search_entries};
 
 pub mod auth;
 pub mod keepass;
@@ -45,6 +37,7 @@ pub fn setup_routes(cfg: &mut web::ServiceConfig) {
             .service(get_group_entries)
             .service(get_entry)
             .service(get_protected)
+            .service(get_otp)
             .service(get_file)
             .service(search_entries)
             .service(get_icon)
