@@ -3,23 +3,23 @@
 **Table of Contents**  *generated with [DocToc](https://github.com/thlorenz/doctoc)*
 
 - [KeePass4Web](#keepass4web)
-  - [FEATURES](#features)
-  - [INSTALL](#install)
-  - [BUILD FRONTEND](#build-frontend)
-  - [CONFIGURATION](#configuration)
-  - [DEPLOYMENT](#deployment)
-    - [Container](#container)
-    - [Classic](#classic)
-  - [BACKENDS](#backends)
-    - [Authentication](#authentication)
-        - [LDAP](#ldap)
-    - [Database](#database)
-        - [Filesystem](#filesystem)
-  - [MISC](#misc)
-  - [LIMITATIONS](#limitations)
-  - [APP DETAILS / BACKGROUND](#app-details--background)
-    - [Sequence of client/server operations](#sequence-of-clientserver-operations)
-  - [COPYRIGHT AND LICENSING](#copyright-and-licensing)
+    - [FEATURES](#features)
+    - [INSTALL](#install)
+    - [BUILD FRONTEND](#build-frontend)
+    - [CONFIGURATION](#configuration)
+    - [DEPLOYMENT](#deployment)
+        - [Container](#container)
+        - [Classic](#classic)
+    - [BACKENDS](#backends)
+        - [Authentication](#authentication)
+            - [LDAP](#ldap)
+        - [Database](#database)
+            - [Filesystem](#filesystem)
+    - [MISC](#misc)
+    - [LIMITATIONS](#limitations)
+    - [APP DETAILS / BACKGROUND](#app-details--background)
+        - [Sequence of client/server operations](#sequence-of-clientserver-operations)
+    - [COPYRIGHT AND LICENSING](#copyright-and-licensing)
 
 <!-- END doctoc generated TOC please keep comment here to allow auto update -->
 
@@ -29,7 +29,6 @@ A mobile-friendly web application that serves KeePass database on a web frontend
 
 Written in Rust and JavaScript.
 
-
 ## FEATURES
 
 - Doesn't save master password/keyfile, uses a new and unique encryption key to cache the database
@@ -37,50 +36,45 @@ Written in Rust and JavaScript.
 - Server revokes encryption keys after a configurable user idle time, effectively removing access to the cached database
 - Web interface offers entry search and access to files stored inside the database. Also displays custom entry icons
 
-
 ![Login](doc/img/login.png)
 
 ![App](doc/img/app.png)
 
-
 ## INSTALL
 
 - From container image:
-See [DEPLOYMENT](#deployment)
+  See [DEPLOYMENT](#deployment)
 
 - From source:
     - Clone the repo to some dir
-        > git clone https://github.com/lixmal/keepass4web-rs.git
+      > git clone https://github.com/lixmal/keepass4web-rs.git
 
-        > cd keepass4web-rs
+      > cd keepass4web-rs
 
     - Follow [BUILD FRONTEND](#build-frontend), [DEPLOYMENT](#deployment) in that order
-
 
 ## BUILD FRONTEND
 
 The minified, bundled file will be written to public/scripts/bundle.js
 
 - Install Node/npm, e.g. for Ubuntu
-    > sudo apt-get install npm
+  > sudo apt-get install npm
 
 - Install js modules
-    > npm install
+  > npm install
 
 - Copy bootstrap font files
-    > cp node_modules/bootstrap/fonts/* public/fonts/
+  > cp node_modules/bootstrap/fonts/* public/fonts/
 
 - Build js bundle
-    > npm run build
+  > npm run build
 
 - For a non-uglified version you can run
-    > npm run dev
-
+  > npm run dev
 
 ## CONFIGURATION
 
 - See `config.yml`
-
 
 ## DEPLOYMENT
 
@@ -93,12 +87,14 @@ The image ships with the default config in `/conf/config.yml`, which should be o
 The app makes use of the [Linux kernel keyring](https://man7.org/linux/man-pages/man7/keyrings.7.html).
 
 The keyring is currently not namespaced, hence container tooling deactivate the specific syscalls by default.
-To make the app run you will need to activate the syscalls by creating a custom seccomp profile and passing the path to the container runtime:
+To make the app run you will need to activate the syscalls by creating a custom seccomp profile and passing the path to
+the container runtime:
 
 - [Docker](https://docs.docker.com/engine/security/seccomp/)
 - [podman](https://docs.podman.io/en/v4.6.0/markdown/options/seccomp-policy.html)
 
-A base file for extension can be found [here](https://github.com/moby/moby/blob/master/profiles/seccomp/default.json), see the `syscalls` section.
+A base file for extension can be found [here](https://github.com/moby/moby/blob/master/profiles/seccomp/default.json),
+see the `syscalls` section.
 
 The required syscalls are:
 
@@ -137,39 +133,45 @@ Run the binary:
 
     target/release/keepass4web-rs
 
-
 ## BACKENDS
 
-### Authentication
+### Authentication Backends
 
-##### LDAP
+* **Htpasswd**
+    * Authenticates users against a `.htpasswd` file.
 
-Attempts to authenticate the user against an (external, not built-in) LDAP server (Microsoft AD, 389 Directory Server, OpenLDAP, ...)
+* **LDAP**
+    * Authenticates against external LDAP servers (Microsoft AD, OpenLDAP, etc.)
+    * Provides customizable search filters, attribute mapping, and secure binding.
 
-### Database
+* **OIDC**
+    * Authenticates users with a compatible OpenID Connect provider.
+    * Retrieves user information, supports customizable scopes, CSRF protection, and logout functionality.
 
-##### Filesystem
+### Database Backends
 
-Grabs the KeePass database from the local filesystem.
-Can get database and key file location from auth backend.
-Web server needs read access to the files.
+* **Filesystem**
+    * Retrieves KeePass databases from the local filesystem.
+    * Can fetch database and keyfile locations from authentication backend or configuration.
+
+* **HTTP**
+    * Fetches KeePass databases over HTTP/HTTPS.
+    * Supports basic authentication and bearer token mechanisms.
 
 ## MISC
 
 - Show kernel keyrings in use (as root)
-    > sudo cat /proc/keys
+  > sudo cat /proc/keys
 
-    > sudo cat /proc/key-users
-
+  > sudo cat /proc/key-users
 
 ## LIMITATIONS
 
 - KeePass databases are read-only
 - Limits of kernel keyring apply
 
-
-
 ## APP DETAILS / BACKGROUND
+
 ### Sequence of client/server operations
 
 ```
@@ -256,6 +258,8 @@ Show cleartext pw
 This software is copyright (c) by Viktor Liu.
 It is released under the terms of the GPL version 3.
 
-Most of the icons in the `public/img/icons` directory are released under the LGPL version 2, the licence can be found in the same directory.
+Most of the icons in the `public/img/icons` directory are released under the LGPL version 2, the licence can be found in
+the same directory.
 The remaining icons are public domain.
-As these icons are the same as the ones used by the original KeePass software, you can refer to the info there: [Icon Acknowledgements](http://keepass.info/help/base/credits.html#icons).
+As these icons are the same as the ones used by the original KeePass software, you can refer to the info
+there: [Icon Acknowledgements](http://keepass.info/help/base/credits.html#icons).
