@@ -33,7 +33,7 @@ regex = "1.10.2"
 mime = "0.3.17"
 aes-gcm = { version = "0.10.3", features = ["zeroize", "std"] }
 constant_time_eq = "0.3.0"
-linux-keyutils = { version = "0.2.3", features = ["std"] }
+linux-keyutils = { version = "0.2.4", features = ["std"] }
 url = { version = "2.5.0", features = ["serde"] }
 openidconnect = "3.4.0"
 async-trait = "0.1.77"
