@@ -37,7 +37,7 @@ linux-keyutils = { version = "0.2.3", features = ["std"] }
 url = { version = "2.5.0", features = ["serde"] }
 openidconnect = "3.4.0"
 async-trait = "0.1.77"
-ldap3 = { version = "0.11.3", default-features = false, features = ["tls-rustls"] }
+ldap3 = { version = "0.11.5", default-features = false, features = ["tls-rustls"] }
 reqwest = { version = "0.11.25", features = ["rustls", "__tls", "rustls-tls", "stream", "webpki-roots", "rustls-tls-webpki-roots"], default-features = false }
 futures = "0.3.30"
 futures-util = { version = "0.3.30", default-features = false, features = ["io"] }

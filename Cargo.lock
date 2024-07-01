@@ -1856,9 +1856,9 @@ dependencies = [
 
 [[package]]
 name = "ldap3"
-version = "0.11.3"
+version = "0.11.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6dceb52eac140c8679326f619b963577ccf5a4ab025fe5e6db424d2fd3e4f400"
+checksum = "166199a8207874a275144c8a94ff6eed5fcbf5c52303e4d9b4d53a0c7ac76554"
 dependencies = [
  "async-trait",
  "bytes",
