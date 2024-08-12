@@ -34,7 +34,7 @@ jobs:
             latest
 
       - name: Build and push Container image
-        uses: docker/build-push-action@2cdde995de11925a030ce8070c3d77a52ffcf1c0
+        uses: docker/build-push-action@16ebe778df0e7752d2cfcbd924afdbbd89c1a755
         with:
           context: .
           push: true
