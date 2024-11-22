@@ -181,84 +181,53 @@ Run the binary:
 
 ### Sequence of client/server operations
 
+```mermaid
+sequenceDiagram
+    participant C as Client
+    participant S as Server
+
+    Note over C,S: Authentication Flow
+    C->>S: Request KeePass tree
+    S-->>C: Not authenticated
+    Note over C: Show credentials dialog
+    C->>S: User credentials
+    Note over S: User auth (LDAP, SQL, ...)
+    S-->>C: Login OK
+    Note over C: Show backend login dialog
+    C->>S: Backend credentials
+    Note over S: Init DB backend / receive token
+    S-->>C: Login OK
+    Note over C: Show KeePass password dialog
+    C->>S: KeePass credentials
+    Note over S: Get KeePass database from backend<br/>Decrypt with master key + key file<br/>Encrypt with new key<br/>Store key in kernel keyring<br/>Write key ID to session<br/>Cache encrypted database
+    S-->>C: Decryption OK
 ```
-Client                                                       Server
 
+```mermaid
+sequenceDiagram
+    participant C as Client
+    participant S as Server
 
-Load website /
-                              request KeePass tree
-                              -------------------->
-
-                                                        Check sesssion
-
-                              not authenticated
-                              <--------------------
-
-Redirect to /user_login
-Show credentials dialog
-
-                              user credentials
-                              -------------------->
-
-                                                        User auth (LDAP, SQL, ...)
-
-                                           login OK
-                              <--------------------
-
-Redirect to /backend_login
-Show backend login dialog
-
-                              backend credentials
-                              -------------------->
-
-                                                        Init DB backend / receive backend token
-                                           login OK
-                              <--------------------
-
-Redirect to /db_login
-Show KeePass password dialog
-
-                              KeePass credentials
-                              -------------------->
-                                                        Get KeePass database from backend
-                                                        Decrypt KeePass database with master key + key file
-                                                        Encrypt serialised string with newly generated key
-                                                        Put encryption key into kernel keyring
-                                                        Write keyring key id to session
-                                                        Place encrypted database into cache
-                                      decryption OK
-                              <--------------------
-
-Redirect to /
-                              request KeePass tree
-                              -------------------->
-
-                                                        Get database from cach
-                                                        Get keyring key id from session
-                                                        Get encryption key from kernel keyring
-                                                        Decrypt database with key
-
-                                  Send KeePass tree
-                              <--------------------
-Show KeePass tree
-
-...
-
-Password request by user
-                              Request pw entry
-                              -------------------->
-
-                                                        Get keyring key id from session
-                                                        Get encryption key from kernel keyring
-                                                        Get database from cache
-                                                        Decrypt database
-                                                        Decrypt requested password
-
-                                  Send pw entry
-                              <--------------------
-Show cleartext pw
-
+    Note over C,S: Get Tree Flow
+    C->>S: Request KeePass tree
+    Note over S: Get database from cache<br/>Get key from keyring<br/>Decrypt database
+    S-->>C: Send KeePass tree
+    Note over C: Show KeePass tree
 ```
+
+```mermaid
+sequenceDiagram
+    participant C as Client
+    participant S as Server
+
+    Note over C,S: Get Password Entry Flow
+    Note over C: Password request by user
+    C->>S: Request pw entry
+    Note over S: Get key from keyring<br/>Get & decrypt database<br/>Decrypt requested password
+    S-->>C: Send pw entry
+    Note over C: Show cleartext pw
+```
+
 
 ## COPYRIGHT AND LICENSING
 
