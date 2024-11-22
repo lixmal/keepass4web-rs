@@ -110,9 +110,18 @@ This is best achieved by running rootless containers with a dedicated user for k
 - [Docker](https://docs.docker.com/engine/security/rootless/)
 - [podman](https://github.com/containers/podman/blob/main/docs/tutorials/rootless_tutorial.md)
 
-Example:
+Example docker:
 
     docker run \
+      -p 8080:8080 -v ./config.yml:/conf/config.yml \
+      -v ./tests/test.kdbx:/db.kdbx \
+      --security-opt seccomp=seccomp/keyring.json \
+      ghcr.io/lixmal/keepass4web-rs:master
+
+Example podman:
+
+    podman run \
+      --userns=keep-id \
       -p 8080:8080 -v ./config.yml:/conf/config.yml \
       -v ./tests/test.kdbx:/db.kdbx \
       --security-opt seccomp=seccomp/keyring.json \
