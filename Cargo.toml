@@ -19,7 +19,7 @@ serde = { version = "1.0.197", features = ["derive"] }
 serde_json = "1.0.108"
 serde_yaml = "0.9.29"
 serde_millis = "0.1.1"
-base64 = "0.22.0"
+base64 = "0.22.1"
 humantime-serde = "1.1.1"
 postcard = { version = "1.0.8", features = ["use-std"] }
 env_logger = { version = "0.11.1", features = [] }
