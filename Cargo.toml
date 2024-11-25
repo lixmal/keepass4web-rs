@@ -26,7 +26,7 @@ env_logger = { version = "0.11.1", features = [] }
 log = "0.4.21"
 rand = "0.8.5"
 keepass = { git = "https://github.com/lixmal/keepass-rs", features = ["serialization", "save_kdbx4"] }
-zeroize = { version = "1.7.0", features = ["derive", "std"] }
+zeroize = { version = "1.8.1", features = ["derive", "std"] }
 secrecy = "0.8.0"
 uuid = { version = "1.8.0", features = ["v4"] }
 regex = "1.10.2"
