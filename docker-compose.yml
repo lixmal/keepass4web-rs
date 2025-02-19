@@ -1,0 +1,11 @@
+version: "3.8"
+services:
+  keepass4web-rs:
+    image: ghcr.io/lixmal/keepass4web-rs:master
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./config.yml:/conf/config.yml
+      - ./tests/test.kdbx:/db.kdbx
+    security_opt:
+      - seccomp=seccomp/keyring.json
