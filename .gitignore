@@ -6,6 +6,11 @@ node_modules/
 public/scripts/bundle.js
 npm-debug.log
 
+# playwright
+test-results/
+playwright-report/
+.playwright/
+
 # vim
 *.sw[a-z]
 
@@ -17,5 +22,3 @@ public/fonts/*
 
 # jetbrains
 .idea
-
-config.test.yml

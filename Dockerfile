@@ -3,7 +3,6 @@ FROM docker.io/rust:1-alpine as build
 WORKDIR /workspace
 
 COPY js js
-COPY .babelrc .babelrc
 COPY public public
 COPY package*.json ./
 

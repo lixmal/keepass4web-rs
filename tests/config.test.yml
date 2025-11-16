@@ -1,0 +1,36 @@
+##################################
+### KeePass4Web test config    ###
+##################################
+
+# Test configuration for E2E tests
+
+db_backend: 'Filesystem'
+auth_backend: 'None'
+
+### Database backends ###
+
+Filesystem:
+    db_location: './tests/test.kdbx'
+
+# Time till database gets closed (shorter for tests)
+db_session_timeout: '5 minutes'
+
+# Session lifetime
+session_lifetime: '30 minutes'
+
+# Cookie same site setting
+cookie_samesite: 'strict'
+
+# Server listen config
+listen: '127.0.0.1'
+port: 8080
+
+search:
+  fields:
+    - title
+    - username
+    - tags
+    - notes
+    - url
+  extra_fields: true
+  allow_regex: false

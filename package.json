@@ -4,6 +4,9 @@
     "description": "Web KeePass application",
     "main": "js/scripts/app.js",
     "scripts": {
+        "test": "playwright test --reporter=list",
+        "test:ui": "playwright test --ui",
+        "test:headed": "playwright test --headed --reporter=list",
         "dev": "./node_modules/.bin/browserify -t browserify-css -t babelify js/scripts/app.js -o public/scripts/bundle.js; sed -i 's/node_modules\\/bootstrap\\/dist/assets/g' public/scripts/bundle.js",
         "watch": "./node_modules/.bin/watchify -t browserify-css -t babelify js/scripts/app.js -o public/scripts/bundle.js & sed -i 's/node_modules\\/bootstrap\\/dist/assets/g' public/scripts/bundle.js",
         "build": "NODE_ENV=production ./node_modules/.bin/browserify -t browserify-css -p [ minifyify --no-map ] -t babelify js/scripts/app.js -o public/scripts/bundle.js; sed -i 's/node_modules\\/bootstrap\\/dist/assets/g' public/scripts/bundle.js"
@@ -24,11 +27,13 @@
         "@babel/core": "^7.26.0",
         "@babel/preset-env": "^7.24.6",
         "@babel/preset-react": "^7.25.9",
+        "@playwright/test": "^1.56.1",
         "babelify": "^10.0.0",
         "browserify": "^17.0.1",
         "browserify-css": "^0.15.0",
         "core-js": "^3.39.0",
-        "minifyify": "^7.3.5"
+        "minifyify": "^7.3.5",
+        "watchify": "^4.0.0"
     },
     "dependencies": {
         "bootstrap": "^3.4.1",
@@ -42,5 +47,11 @@
         "autoInject": true,
         "minify": true,
         "rootDir": "."
+    },
+    "babel": {
+        "presets": [
+            "@babel/preset-env",
+            "@babel/preset-react"
+        ]
     }
 }
