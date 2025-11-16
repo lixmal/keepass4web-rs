@@ -45,4 +45,4 @@ htpasswd-verify = { git = "https://github.com/twistedfall/htpasswd-verify", rev 
 
 [dev-dependencies]
 clippy = "0.0.302"
-mockito = "1.4.0"
+mockito = "1.7.0"
