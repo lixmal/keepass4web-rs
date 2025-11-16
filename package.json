@@ -39,8 +39,8 @@
         "bootstrap": "^3.4.1",
         "classnames": "^2.5.1",
         "jquery": "^3.7.1",
-        "react": "^16.0.0",
-        "react-dom": "^16.0.0",
+        "react": "^19.2.0",
+        "react-dom": "^19.2.0",
         "react-router-dom": "^6.30.2"
     },
     "browserify-css": {
