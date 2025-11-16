@@ -129,6 +129,25 @@ Example podman:
 
 (master password: `test`)
 
+
+### Docker Compose
+
+For easier deployment, you can use Docker Compose file
+
+Then, to start the container run:
+
+
+```
+docker-compose up -d
+
+```
+
+To stop the container:
+
+```
+docker-compose down
+```
+
 ### Classic
 
 This requires rust installed, compile the binary:
