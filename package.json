@@ -31,7 +31,7 @@
         "babelify": "^10.0.0",
         "browserify": "^17.0.1",
         "browserify-css": "^0.15.0",
-        "core-js": "^3.46.0",
+        "core-js": "^3.47.0",
         "terser": "^5.44.1",
         "uglifyify": "^5.0.2",
         "watchify": "^4.0.0"
