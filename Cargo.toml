@@ -29,7 +29,7 @@ keepass = { git = "https://github.com/lixmal/keepass-rs", features = ["serializa
 zeroize = { version = "1.8.2", features = ["derive", "std"] }
 secrecy = "0.8.0"
 uuid = { version = "1.8.0", features = ["v4"] }
-regex = "1.10.2"
+regex = "1.12.2"
 mime = "0.3.17"
 aes-gcm = { version = "0.10.3", features = ["zeroize", "std"] }
 constant_time_eq = "0.3.1"
