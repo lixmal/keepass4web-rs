@@ -35,6 +35,9 @@ LDAP:
     uri:    'ldap://127.0.0.1:389'
     scope:  'subtree'
     base_dn: 'OU=People,DC=example,DC=org'
+    # additional filter, automatically combined with the login attribute match:
+    # (&(<login_attribute>=<username>)<filter>)
+    # no placeholder substitution takes place, leave empty to match on the login attribute only
     filter: '(&(objectClass=inetOrgPerson)(memberOf=CN=keepass,OU=groups,DC=example,DC=org))'
 
     # (unique) ldap attribute for user login
