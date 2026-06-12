@@ -9,8 +9,6 @@ use zeroize::Zeroize;
 
 use crate::keepass::key::SecretKey;
 
-const LENGTH_IV: usize = 16;
-
 #[derive(Clone, Serialize, Deserialize)]
 pub struct Encrypted {
     data: Vec<u8>,
@@ -20,8 +18,7 @@ pub struct Encrypted {
 }
 
 impl Encrypted {
-    pub fn encrypt(mut input: Vec<u8>, aad: &[u8], timeout: Duration) -> Result<(SecretKey, Encrypted)> {
-        input.extend([0; LENGTH_IV]);
+    pub fn encrypt(input: Vec<u8>, aad: &[u8], timeout: Duration) -> Result<(SecretKey, Encrypted)> {
         let iv = Aes256Gcm::generate_nonce(&mut thread_rng()); // 96-bits; unique per message
         let mut enc = Encrypted {
             data: input,
@@ -42,7 +39,7 @@ impl Encrypted {
         let cipher = Aes256Gcm::new(key);
         cipher.decrypt_in_place(Nonce::from_slice(&self.iv), aad, &mut self.data)?;
 
-        let v = self.data[0..self.data.len() - LENGTH_IV].to_vec();
+        let v = self.data.clone();
         self.data.zeroize();
         Ok(SecretVec::new(v))
     }
