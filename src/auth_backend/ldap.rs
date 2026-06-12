@@ -8,6 +8,14 @@ use crate::config::ldap;
 
 const CN_ATTR: &str = "CN";
 
+// ldap attribute names are case-insensitive (RFC 4512), but servers return
+// them in their own canonical casing, e.g. openldap returns 'cn' for 'CN'
+fn get_attr_ci<'a>(attrs: &'a std::collections::HashMap<String, Vec<String>>, name: &str) -> Option<&'a Vec<String>> {
+    attrs.iter()
+        .find(|(k, _)| k.eq_ignore_ascii_case(name))
+        .map(|(_, v)| v)
+}
+
 pub struct Ldap {
     pub(crate) config: ldap::Ldap,
 }
@@ -35,7 +43,7 @@ impl AuthBackend for Ldap {
             self.config.password.as_str(),
         ).await?;
 
-        let mut attrs = vec![CN_ATTR];
+        let mut attrs = vec![CN_ATTR, self.config.login_attribute.as_str()];
         if let Some(k) = &self.config.database_attribute {
             attrs.push(k);
         }
@@ -69,20 +77,20 @@ impl AuthBackend for Ldap {
         ).await?.success()?;
         ldap.unbind().await?;
 
-        let cn = user.attrs.get(CN_ATTR)
+        let cn = get_attr_ci(&user.attrs, CN_ATTR)
             .ok_or(anyhow!("CN attribute not found"))?;
-        let id = user.attrs.get(&self.config.login_attribute)
+        let id = get_attr_ci(&user.attrs, &self.config.login_attribute)
             .ok_or(anyhow!("login attribute '{}' not found", &self.config.login_attribute))?;
 
         let mut db_location = None;
         let mut keyfile_location = None;
         if let Some(key) = &self.config.database_attribute {
-            if let Some(v) = user.attrs.get(key) {
+            if let Some(v) = get_attr_ci(&user.attrs, key) {
                 db_location = Some(v[0].clone());
             }
         }
         if let Some(key) = &self.config.keyfile_attribute {
-            if let Some(v) = user.attrs.get(key) {
+            if let Some(v) = get_attr_ci(&user.attrs, key) {
                 keyfile_location = Some(v[0].clone());
             }
         }
@@ -96,5 +104,21 @@ impl AuthBackend for Ldap {
                 additional_data: None,
             }
         )
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn attribute_lookup_is_case_insensitive() {
+        let mut attrs = std::collections::HashMap::new();
+        attrs.insert("cn".to_string(), vec!["Test User".to_string()]);
+        attrs.insert("uID".to_string(), vec!["testuser".to_string()]);
+
+        assert_eq!(get_attr_ci(&attrs, "CN").unwrap()[0], "Test User");
+        assert_eq!(get_attr_ci(&attrs, "uid").unwrap()[0], "testuser");
+        assert!(get_attr_ci(&attrs, "mail").is_none());
     }
 }
