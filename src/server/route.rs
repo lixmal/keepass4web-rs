@@ -1,6 +1,7 @@
 use actix_files as fs;
 use actix_files::NamedFile;
-use actix_web::{Responder, web};
+use actix_web::{HttpResponse, Responder, web};
+use serde_json::json;
 
 use crate::server::route::auth::{
     authenticated,
@@ -28,6 +29,7 @@ pub mod util;
 pub const API_PATH: &str = "/api/v1";
 pub const STATIC_PATH: &str = "/assets";
 pub const INDEX_FILE: &str = "public/index.html";
+pub const ROUTE_HEALTH: &str = "/health";
 
 pub fn setup_routes(cfg: &mut web::ServiceConfig) {
     cfg
@@ -52,6 +54,9 @@ pub fn setup_routes(cfg: &mut web::ServiceConfig) {
 
         .service(callback_user_auth)
 
+        // unauthenticated liveness probe
+        .route(ROUTE_HEALTH, web::get().to(health))
+
         // static
         .route("/", web::get().to(index))
         .route("/keepass", web::get().to(index))
@@ -64,5 +69,13 @@ pub fn setup_routes(cfg: &mut web::ServiceConfig) {
 
 async fn index() -> impl Responder {
     NamedFile::open_async(INDEX_FILE).await
+}
+
+async fn health() -> impl Responder {
+    HttpResponse::Ok().json(json!(
+        {
+            "status": "ok",
+        }
+    ))
 }
 
