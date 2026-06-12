@@ -66,7 +66,9 @@ pub trait AuthBackend: Send + Sync {
 
     fn get_logout_type(&self, _user_info: &UserInfo, _host: &str, _cache: &AuthCache) -> Result<LogoutType> { Ok(LogoutType::None) }
 
-    //  TODO: handle case sensitivity
+    // backends returning case-insensitive user names must lowercase
+    // UserInfo.id: it keys the db cache (see ldap/htpasswd). OIDC subjects
+    // are case-sensitive opaque strings and are used as-is.
     async fn login(&self, _username: &str, _password: &str) -> Result<UserInfo> {
         bail!("login method not supported")
     }
