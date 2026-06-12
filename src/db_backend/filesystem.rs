@@ -65,9 +65,10 @@ impl DbBackend for Filesystem {
             path = Path::new(db_location);
         }
 
+        // File::open opens read-only, writes would fail with EBADF
         Ok(
             (
-                Box::pin(File::open(
+                Box::pin(File::create(
                     path
                 ).await?),
                 None
@@ -89,5 +90,37 @@ impl Filesystem {
         Self {
             config: config.filesystem.clone()
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+    use super::*;
+
+    #[tokio::test]
+    async fn write_roundtrip() {
+        let path = std::env::temp_dir().join("k4w-filesystem-write-test.kdbx");
+        let _ = tokio::fs::remove_file(&path).await;
+
+        let mut config = Config::default();
+        config.filesystem.db_location = path.clone();
+        let mut backend = Filesystem::new(&config);
+
+        let data = b"some database content";
+        {
+            let (mut writer, rx) = backend.get_db_write(&UserInfo::default()).await.unwrap();
+            writer.write_all(data).await.unwrap();
+            writer.shutdown().await.unwrap();
+            assert!(rx.is_none());
+        }
+
+        let mut reader = backend.get_db_read(&UserInfo::default()).await.unwrap();
+        let mut read_back = vec![];
+        reader.read_to_end(&mut read_back).await.unwrap();
+        assert_eq!(read_back, data);
+
+        let _ = tokio::fs::remove_file(&path).await;
     }
 }
