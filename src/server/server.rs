@@ -1,7 +1,7 @@
 use actix_session::{config::PersistentSession, SessionMiddleware, storage::CookieSessionStore};
 use actix_web::{App, HttpServer, web};
 use actix_web::cookie::time::Duration;
-use actix_web::middleware::Logger;
+use actix_web::middleware::{DefaultHeaders, Logger};
 use anyhow::Result;
 use env_logger::Env;
 
@@ -45,6 +45,16 @@ impl Server {
                         .build(),
                 )
                 .wrap(Logger::default())
+                // registered last = outermost, so the headers are also set on
+                // responses short-circuited by the middlewares above.
+                // CSP is omitted for now: the index page relies on
+                // inline script injection (see embed_in_index)
+                .wrap(
+                    DefaultHeaders::new()
+                        .add(("X-Frame-Options", "DENY"))
+                        .add(("X-Content-Type-Options", "nosniff"))
+                        .add(("Referrer-Policy", "no-referrer"))
+                )
                 .configure(setup_routes)
         }).bind((server, port))?
             .run()
