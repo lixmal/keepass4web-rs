@@ -1,113 +1,81 @@
 ##################################
 ### KeePass4Web related config ###
 ##################################
+#
+# This is the default configuration: the database is read from the filesystem
+# and the master password is the only gate. For htpasswd, LDAP or OIDC examples
+# with pre-filled test values see config.example.yml.
+#
 
-# where to get keepass database from
-# available: Filesystem, HTTP
+# Where to get KeePass databases from.
+# Available: Filesystem, HTTP
 db_backend: 'Filesystem'
 
-# backend to authenticate users before anything else
-# available: None, LDAP, OIDC, htpasswd
-# None is only useful in single-user environments
+# Authentication backend, applied before the database is opened.
+# Available: None, htpasswd, LDAP, OIDC
+# None leaves the master password as the only gate and is meant for
+# single-user setups. See config.example.yml for the other backends.
 auth_backend: 'None'
+
 
 ### Database backends ###
 
-# filesystem specific configuration, db_backend = 'Filesystem'
+# db_backend: Filesystem
 Filesystem:
     db_location: './db.kdbx'
-    # optional, storing key files on the filesystem is not recommended
+    # optional key file — storing key files on the server is not recommended
     # keyfile_location: './db.key'
 
-# http specific configuration, db_backend = 'HTTP'
-HTTP:
-    # database_url: ''
-    # keyfile_url: ''
-    # credentials:
-    #   username: ''
-    #   password: ''
-    # bearer: ''
+# db_backend: HTTP
+# HTTP:
+#     database_url: ''
+#     # keyfile_url: ''
+#     # credentials:
+#     #   username: ''
+#     #   password: ''
+#     # bearer: ''
+
 
 ### Authentication backends ###
 
-# ldap specific configuration, auth_backend = 'LDAP'
-LDAP:
-    uri:    'ldap://127.0.0.1:389'
-    scope:  'subtree'
-    base_dn: 'OU=People,DC=example,DC=org'
-    # additional filter, automatically combined with the login attribute match:
-    # (&(<login_attribute>=<username>)<filter>)
-    # no placeholder substitution takes place, leave empty to match on the login attribute only
-    filter: '(&(objectClass=inetOrgPerson)(memberOf=CN=keepass,OU=groups,DC=example,DC=org))'
-
-    # (unique) ldap attribute for user login
-    # Active Directory: sAMAccountName or userPrincipalName
-    # openLDAP/389 Directory Server/etc: uid
-    login_attribute: 'uid'
-
-    # ldap bind DN and password, leave empty for anonymous bind
-    bind:     'CN=ldap-read,OU=Special Users,DC=example,DC=org'
-    password: ''
-
-    # ldap attribute containing the keepass database and/or keyfile location for the authed user
-    # leave commented out to use static db/keyfile location from db backend
-    # database_attribute: 'keePass'
-    # keyfile_attribute:  'keePassKeyFile'
-
-# open id connect specific configuration, auth_backend = 'OIDC'
-OIDC:
-    # url to the issuer (discovery url)
-    # issuer: ''
-    client_id: ''
-    client_secret: ''
-    # required for logout without confirmation
-    # the token is pretty big and might not fit into a session cookie
-    # disable if issues arise
-    save_id_token: true
-    scopes:
-      - 'profile'
-      # scope containing the keepass_location and/or keyfile_location claims for the authed user
-      # leave commented out to use static db/keyfile location from db backend
-      # - 'keepass'
-
-# htpasswd specific configuration, auth_backend = 'htpasswd'
+# auth_backend: htpasswd
+# Create the password file with: htpasswd -cB .htpasswd <username>
 htpasswd:
     path: '.htpasswd'
 
-# time till database gets closed (user idle time)
-# user will have to reenter database password/keyfile
+
+### General settings ###
+
+# Time before the database is automatically closed (user idle timeout).
 db_session_timeout: '10 minutes'
-# interval to watch for user auth_backend changes (to present proper login page, even when user is idling)
+
+# How often to re-check whether the auth backend has changed.
 auth_check_interval: '1 hour 5 minutes'
 
 search:
-  # fields to search for matching entries
   fields:
     - title
     - username
     - tags
     - notes
     - url
-  # whether to search in user supplied fields and file names
   extra_fields: true
-  # whether regexes in the search pattern are interpreted
   allow_regex: false
 
-
-# Secret key used for session cookies
-# Must be at least 64 bytes long, obtained from a cryptographically secure source.
-# Will be generated on the fly if not specified.
-# Set a static key for sessions to survive server restarts.
+# Secret key for signing session cookies (at least 64 bytes).
+# Generated on the fly when omitted — sessions don't survive restarts.
+# Set a static value to keep sessions across restarts.
 # session_secret_key: ''
-# Cookie session lifetime
+
+# How long a session cookie lives in the browser.
 session_lifetime: '1 hour'
-# Cookie same site setting: strict/lax/none
-# Redirecting backends might require lax here
+
+# SameSite policy for the session cookie: strict / lax / none
+# Use 'lax' when auth_backend is OIDC (redirect flow requires it).
 cookie_samesite: 'strict'
 
-# Whether to trust Forwarded/X-Forwarded-For headers for the client ip
-# (used by login rate limiting). Only enable when running behind a
-# reverse proxy that sets these headers, they are spoofable otherwise.
+# Trust Forwarded / X-Forwarded-For headers for the client IP.
+# Only enable when running behind a reverse proxy you control.
 trust_proxy_headers: false
 
 # Whether to use the Linux kernel keyring for session key storage.
