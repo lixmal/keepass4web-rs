@@ -167,11 +167,11 @@ pub(crate) fn retrieve_key(config: &Config, session: &Session) -> anyhow::Result
     let key_id = session.get::<KeyId>(SESSION_KEY_KEY_ID)?
         .ok_or(anyhow!("failed to retrieve key id from session"))?;
 
-    SecretKey::retrieve(&key_id, config.db_session_timeout)
+    SecretKey::retrieve(&key_id, config.db_session_timeout, config.use_keyring)
 }
 
 pub(crate) fn store_key(config: &Config, session: &Session, mut key: SecretKey) -> anyhow::Result<()> {
-    key.store(config.db_session_timeout)?;
+    key.store(config.db_session_timeout, config.use_keyring)?;
     session.insert(SESSION_KEY_KEY_ID, key.key_id)?;
 
     Ok(())

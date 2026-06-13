@@ -110,5 +110,14 @@ cookie_samesite: 'strict'
 # reverse proxy that sets these headers, they are spoofable otherwise.
 trust_proxy_headers: false
 
+# Whether to use the Linux kernel keyring for session key storage.
+# Ignored on non-Linux platforms (always falls back to in-memory).
+# Set to false if your container runtime blocks the keyctl/add_key/request_key
+# syscalls — for example when running the Docker image on macOS with Docker
+# Desktop and no custom seccomp profile. The in-memory store is slightly
+# weaker (keys live in process memory rather than the kernel) but fully
+# functional for single-instance deployments.
+use_keyring: true
+
 listen:  '::'
 port:    8080
