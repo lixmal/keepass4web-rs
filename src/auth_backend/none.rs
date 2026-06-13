@@ -7,7 +7,7 @@ pub struct None;
 
 #[async_trait]
 impl AuthBackend for None {
-    fn get_login_type(&self, _: &str, _: &AuthCache) -> Result<LoginType> {
+    async fn get_login_type(&self, _: &str, _: &AuthCache) -> Result<LoginType> {
         Ok(LoginType::None)
     }
 

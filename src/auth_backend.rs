@@ -62,9 +62,9 @@ pub trait AuthBackend: Send + Sync {
 
     async fn init(&self) -> Result<AuthCache> { Ok(Box::new(())) }
 
-    fn get_login_type(&self, host: &str, cache: &AuthCache) -> Result<LoginType>;
+    async fn get_login_type(&self, host: &str, cache: &AuthCache) -> Result<LoginType>;
 
-    fn get_logout_type(&self, _user_info: &UserInfo, _host: &str, _cache: &AuthCache) -> Result<LogoutType> { Ok(LogoutType::None) }
+    async fn get_logout_type(&self, _user_info: &UserInfo, _host: &str, _cache: &AuthCache) -> Result<LogoutType> { Ok(LogoutType::None) }
 
     // backends returning case-insensitive user names must lowercase
     // UserInfo.id: it keys the db cache (see ldap/htpasswd). OIDC subjects

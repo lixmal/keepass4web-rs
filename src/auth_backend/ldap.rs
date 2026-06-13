@@ -48,7 +48,7 @@ impl AuthBackend for Ldap {
         self.config.validate()
     }
 
-    fn get_login_type(&self, _: &str, _: &AuthCache) -> Result<LoginType> {
+    async fn get_login_type(&self, _: &str, _: &AuthCache) -> Result<LoginType> {
         Ok(LoginType::Mask)
     }
 

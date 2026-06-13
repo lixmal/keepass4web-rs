@@ -180,7 +180,7 @@ async fn get_login_type(request: &HttpRequest) -> Result<LoginType> {
     };
     let session = request.get_session();
     let host = format!("{}://{}", request.connection_info().scheme(), request.connection_info().host());
-    let login_type = auth_backend::new(config).get_login_type(&host, cache)?;
+    let login_type = auth_backend::new(config).get_login_type(&host, cache).await?;
 
     match &login_type {
         Redirect { state, .. } => {
