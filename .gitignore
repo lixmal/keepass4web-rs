@@ -20,5 +20,8 @@ public/fonts/*
 # data
 *.kdbx
 
+# local environment (copied from .env.example)
+.env
+
 # jetbrains
 .idea

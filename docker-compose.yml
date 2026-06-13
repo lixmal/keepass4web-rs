@@ -9,3 +9,67 @@ services:
       - ./tests/test.kdbx:/db.kdbx
     security_opt:
       - seccomp=seccomp/keyring.json
+
+  ### Optional auth backends for testing ###
+  #
+  # The services below are disabled by default. To enable one:
+  #   1. cp .env.example .env   (example credentials, adjust if you like)
+  #   2. remove the leading '#' from the service block you need
+  #      (openldap for auth_backend: LDAP, keycloak for auth_backend: OIDC)
+  #   3. update config.yml as shown below, then: docker compose up -d
+  #
+  # --- OpenLDAP (auth_backend: LDAP) ---
+  #
+  # Seeded with the LDAP_TEST_USER / LDAP_TEST_PASSWORD user from .env.
+  # Matching config.yml settings (with the .env.example defaults):
+  #
+  #   auth_backend: 'LDAP'
+  #   LDAP:
+  #     uri: 'ldap://openldap:1389'        # 'ldap://127.0.0.1:1389' when running the app outside compose
+  #     scope: 'subtree'
+  #     base_dn: 'ou=users,dc=example,dc=org'
+  #     filter: '(objectClass=inetOrgPerson)'
+  #     login_attribute: 'uid'
+  #     bind: 'cn=admin,dc=example,dc=org'
+  #     password: 'adminpassword'
+  #
+  #openldap:
+  #  image: docker.io/bitnamilegacy/openldap:2.6
+  #  ports:
+  #    - "1389:1389"
+  #  environment:
+  #    - LDAP_ROOT=${LDAP_ROOT}
+  #    - LDAP_ADMIN_USERNAME=${LDAP_ADMIN_USERNAME}
+  #    - LDAP_ADMIN_PASSWORD=${LDAP_ADMIN_PASSWORD}
+  #    - LDAP_USERS=${LDAP_TEST_USER}
+  #    - LDAP_PASSWORDS=${LDAP_TEST_PASSWORD}
+
+  # --- Keycloak (auth_backend: OIDC) ---
+  #
+  # The realm 'keepass' is imported automatically from tests/keycloak/realm.json:
+  # confidential client 'keepass4web' (secret in .env.example) with the redirect
+  # URI http://localhost:8080/callback_user_auth, and user 'testuser' / 'testpass'.
+  # Admin console: http://localhost:8081 (KC_ADMIN_USERNAME / KC_ADMIN_PASSWORD from .env).
+  # Matching config.yml settings (with the .env.example defaults):
+  #
+  #   auth_backend: 'OIDC'
+  #   OIDC:
+  #     issuer: 'http://keycloak:8080/realms/keepass'   # 'http://localhost:8081/realms/keepass' outside compose
+  #     client_id: 'keepass4web'
+  #     client_secret: 'insecure-example-client-secret'
+  #     save_id_token: true
+  #     scopes:
+  #       - 'profile'
+  #
+  # Note: redirecting auth backends may require cookie_samesite: 'lax'.
+  #
+  #keycloak:
+  #  image: quay.io/keycloak/keycloak:26.0
+  #  command: start-dev --import-realm
+  #  ports:
+  #    - "8081:8080"
+  #  volumes:
+  #    - ./tests/keycloak:/opt/keycloak/data/import:ro
+  #  environment:
+  #    - KC_BOOTSTRAP_ADMIN_USERNAME=${KC_ADMIN_USERNAME}
+  #    - KC_BOOTSTRAP_ADMIN_PASSWORD=${KC_ADMIN_PASSWORD}
