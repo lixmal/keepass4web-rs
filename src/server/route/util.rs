@@ -1,7 +1,6 @@
 use actix_session::Session;
 use actix_web::HttpResponse;
 use anyhow::{anyhow, bail};
-use linux_keyutils::KeyError;
 use log::{error, info};
 use serde_json::json;
 
@@ -10,7 +9,7 @@ use crate::auth_backend::UserInfo;
 use crate::config::config::Config;
 use crate::keepass::db_cache::{CacheExpiredError, DbCache};
 use crate::keepass::keepass::KeePass;
-use crate::keepass::key::{KeyId, SecretKey};
+use crate::keepass::key::{KeyId, KeyUnavailableError, SecretKey};
 use crate::session::AuthSession;
 
 pub const SESSION_KEY_KEY_ID: &str = "key_id";
@@ -125,7 +124,7 @@ pub(crate) async fn get_db(session: &Session, config: &Config, db_cache: &DbCach
                 }
             );
 
-            return match err.downcast_ref::<KeyError>() {
+            return match err.downcast_ref::<KeyUnavailableError>() {
                 Some(_) => {
                     _close_db(session, config, db_cache).await?;
 
@@ -197,12 +196,9 @@ pub(crate) fn revoke_key(config: &Config, session: &Session) -> anyhow::Result<(
 fn check_key_err<F>(ok: F, err: anyhow::Error) -> anyhow::Result<()>
     where F: Fn() -> anyhow::Result<()>
 {
-    match err.downcast_ref::<KeyError>() {
-        Some(e) => match e {
-            // Ignore non-existent, expired or already revoked
-            KeyError::KeyDoesNotExist | KeyError::KeyExpired | KeyError::KeyRevoked => ok(),
-            _ => Err(err),
-        }
+    // Ignore non-existent, expired or already revoked
+    match err.downcast_ref::<KeyUnavailableError>() {
+        Some(_) => ok(),
         None => Err(err),
     }
 }
