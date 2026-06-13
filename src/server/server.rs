@@ -8,6 +8,7 @@ use env_logger::Env;
 use crate::{auth, auth_backend};
 use crate::config::config::Config;
 use crate::keepass::db_cache::DbCache;
+use crate::rate_limit::RateLimiter;
 use crate::server::route::setup_routes;
 
 pub struct Server;
@@ -22,11 +23,13 @@ impl Server {
         let config_data = web::Data::new(config);
         let auth_cache = web::Data::new(auth_backend::new(&config_data).init().await?);
         let db_cache = web::Data::new(DbCache::default());
+        let rate_limiter = web::Data::new(RateLimiter::default());
 
         HttpServer::new(move || {
             App::new()
                 .app_data(db_cache.clone())
                 .app_data(auth_cache.clone())
+                .app_data(rate_limiter.clone())
                 .app_data(config_data.clone())
                 .wrap(auth::CheckAuth)
                 .wrap(

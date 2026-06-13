@@ -102,5 +102,10 @@ session_lifetime: '1 hour'
 # Redirecting backends might require lax here
 cookie_samesite: 'strict'
 
+# Whether to trust Forwarded/X-Forwarded-For headers for the client ip
+# (used by login rate limiting). Only enable when running behind a
+# reverse proxy that sets these headers, they are spoofable otherwise.
+trust_proxy_headers: false
+
 listen:  '::'
 port:    8080

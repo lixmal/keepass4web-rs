@@ -12,6 +12,7 @@ use crate::auth_backend::{AuthCache, SESSION_KEY_AUTH_STATE, UserInfo};
 use crate::config::config::Config;
 use crate::keepass::db_cache::DbCache;
 use crate::keepass::keepass::KeePass;
+use crate::rate_limit::RateLimiter;
 use crate::server::route::INDEX_FILE;
 use crate::server::route::util::{_close_db, check_user_session, db_is_open, revoke_key, set_user_session, store_key};
 use crate::session::AuthSession;
@@ -54,9 +55,27 @@ async fn authenticated(session: Session, config: Data<Config>, db_cache: Data<Db
 
 
 #[post("/user_login")]
-async fn user_login(session: Session, config: Data<Config>, params: web::Form<UserLogin>) -> impl Responder {
+async fn user_login(request: HttpRequest, session: Session, config: Data<Config>, rate_limiter: Data<RateLimiter>, params: web::Form<UserLogin>) -> impl Responder {
     if let Err(err) = check_user_session(&session, &params.username) {
         return err;
+    }
+
+    // forwarding headers are spoofable, only honor them when explicitly
+    // configured (i.e. behind a reverse proxy that sets them)
+    let client_ip = if config.trust_proxy_headers {
+        request.connection_info().realip_remote_addr().unwrap_or("unknown").to_string()
+    } else {
+        request.peer_addr().map(|addr| addr.ip().to_string()).unwrap_or_else(|| "unknown".to_string())
+    };
+    let rate_key = format!("{}|{}", client_ip, params.username.to_lowercase());
+    if let Some(remaining) = rate_limiter.check(&rate_key).await {
+        info!("user login from '{}' ({}): rate limited for {}s", params.username, client_ip, remaining.as_secs());
+        return HttpResponse::TooManyRequests().json(json!(
+            {
+                "success": false,
+                "message": "too many failed login attempts, try again later",
+            }
+        ));
     }
 
     let auth_backend = auth_backend::new(&config);
@@ -64,6 +83,7 @@ async fn user_login(session: Session, config: Data<Config>, params: web::Form<Us
     let user_info = match auth_backend.login(params.username.as_str(), params.password.as_str()).await {
         Ok(user_info) => user_info,
         Err(err) => {
+            rate_limiter.failure(&rate_key).await;
             info!("user login from '{}': {}", params.username, err);
             return HttpResponse::Unauthorized().json(json!(
                 {
@@ -73,6 +93,7 @@ async fn user_login(session: Session, config: Data<Config>, params: web::Form<Us
             ));
         }
     };
+    rate_limiter.success(&rate_key).await;
 
     let csrf_token = match set_user_session(session, &user_info) {
         Ok(v) => v,
