@@ -33,7 +33,7 @@ impl DbBackend for Http {
     async fn get_db_read(&self, user_info: &UserInfo) -> Result<Pin<Box<dyn AsyncRead + '_>>> {
         let url = self.get_db_url(user_info)?;
 
-        let response = self.get_request(Method::GET, url)?.send().await?;
+        let response = self.get_request(Method::GET, url)?.send().await?.error_for_status()?;
         Ok(
             Self::get_boxed_response(response)
         )
@@ -63,7 +63,7 @@ impl DbBackend for Http {
             Err(err) => return Some(Err(err))
         };
 
-        match request.send().await {
+        match request.send().await.and_then(|r| r.error_for_status()) {
             Ok(response) => {
                 Some(Ok(Self::get_boxed_response(response)))
             }
@@ -82,7 +82,7 @@ impl DbBackend for Http {
 
         let (tx, rx) = oneshot::channel();
         tokio::spawn(async move {
-            tx.send(match req.send().await {
+            tx.send(match req.send().await.and_then(|r| r.error_for_status()) {
                 Ok(_) => Ok(()),
                 Err(err) => Err(err).map_err(Error::new),
             }) // ignore failed send
@@ -217,6 +217,38 @@ mod tests {
     #[tokio::test]
     async fn write_fail() {
         let res = write_http(Url::from_str("http://0.0.0.0").unwrap()).await;
+
+        assert!(res.is_err());
+    }
+
+    #[tokio::test]
+    async fn read_fail_on_error_status() {
+        let mut server = mockito::Server::new_async().await;
+        let mock = server.mock("GET", "/")
+            .with_body("<html>not found</html>")
+            .with_status(404)
+            .create_async().await;
+
+        let mut config = Config::default();
+        config.http.database_url = Some(Url::from_str(&server.url()).unwrap());
+        let http = Http::new(&config);
+        let res = http.get_db_read(&UserInfo::default()).await;
+
+        mock.assert_async().await;
+
+        assert!(res.is_err());
+    }
+
+    #[tokio::test]
+    async fn write_fail_on_error_status() {
+        let mut server = mockito::Server::new_async().await;
+        let mock = server.mock("PUT", "/")
+            .with_status(500)
+            .create_async().await;
+
+        let res = write_http(Url::from_str(&server.url()).unwrap()).await;
+
+        mock.assert_async().await;
 
         assert!(res.is_err());
     }
