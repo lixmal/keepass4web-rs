@@ -20,7 +20,7 @@ jobs:
       packages: write
     steps:
       - name: Check out the repo
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
 
       - name: Log in to GitHub Packages
         uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f
