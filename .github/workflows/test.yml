@@ -88,11 +88,15 @@ jobs:
   all-tests-passed:
     name: All Tests Passed
     runs-on: ubuntu-latest
-    needs: [backend, frontend-e2e]
+    needs: [lint, backend, frontend-e2e]
     if: always()
     steps:
       - name: Check all jobs
         run: |
+          if [ "${{ needs.lint.result }}" != "success" ]; then
+            echo "Lints failed"
+            exit 1
+          fi
           if [ "${{ needs.backend.result }}" != "success" ]; then
             echo "Backend tests failed"
             exit 1
