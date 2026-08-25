@@ -36,10 +36,10 @@ pub struct Ldap {
 impl Default for Ldap {
     fn default() -> Self {
         Ldap {
-            uri: "ldap://localhost:339".to_string(),
+            uri: "ldap://localhost:389".to_string(),
             scope: Scope::default(),
             base_dn: "".to_string(),
-            filter: "()".to_string(),
+            filter: "".to_string(),
             login_attribute: "uid".to_string(),
             bind: "".to_string(),
             password: "".to_string(),
