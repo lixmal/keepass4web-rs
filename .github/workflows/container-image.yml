@@ -23,7 +23,7 @@ jobs:
         uses: actions/checkout@v5
 
       - name: Log in to GitHub Packages
-        uses: docker/login-action@5e57cd118135c172c3672efd75eb46360885c0ef
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
