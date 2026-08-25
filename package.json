@@ -4,7 +4,6 @@
     "description": "Web KeePass application",
     "main": "js/scripts/app.js",
     "scripts": {
-        "postinstall": "cp node_modules/bootstrap/fonts/* public/fonts/",
         "test": "playwright test --reporter=list",
         "test:ui": "playwright test --ui",
         "test:headed": "playwright test --headed --reporter=list",
