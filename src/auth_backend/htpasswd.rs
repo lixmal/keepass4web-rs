@@ -48,7 +48,8 @@ impl AuthBackend for Htpasswd {
 
         Ok(
             UserInfo {
-                id: username.to_owned(),
+                // lowercase like the ldap backend, the id keys the db cache
+                id: username.to_lowercase(),
                 name: username.to_owned(),
                 db_location: None,
                 keyfile_location: None,
