@@ -191,7 +191,7 @@ async fn db_login(session: Session, config: Data<Config>, db_cache: Data<DbCache
         error!("db login from '{}': failed to store key: {}", username, err);
         return HttpResponse::InternalServerError().json(json!(
             {
-                "success": true,
+                "success": false,
                 "message": "failed to store key",
             }
         ));
@@ -204,7 +204,7 @@ async fn db_login(session: Session, config: Data<Config>, db_cache: Data<DbCache
         }
         return HttpResponse::InternalServerError().json(json!(
             {
-                "success": true,
+                "success": false,
                 "message": "failed to store db",
             }
         ));
@@ -221,7 +221,7 @@ async fn db_login(session: Session, config: Data<Config>, db_cache: Data<DbCache
 fn get_user_info(session: &Session) -> Result<UserInfo, HttpResponse> {
     let resp = HttpResponse::InternalServerError().json(json!(
         {
-            "success": true,
+            "success": false,
             "message": "failed to retrieve session",
         }
     ));

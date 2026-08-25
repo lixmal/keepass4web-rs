@@ -69,7 +69,7 @@ pub(crate) fn set_user_session(session: Session, user_info: &UserInfo) -> anyhow
 pub(crate) async fn _close_db(session: &Session, config: &Config, db_cache: &DbCache) -> Result<(), HttpResponse> {
     let err_resp = HttpResponse::InternalServerError().json(json!(
         {
-            "success": true,
+            "success": false,
             "message": "failed to close db",
         }
     ));
