@@ -47,6 +47,9 @@ pub(crate) fn check_user_session(session: &Session, username: &str) -> Result<()
 }
 
 pub(crate) fn set_user_session(session: Session, user_info: &UserInfo) -> anyhow::Result<CsrfToken> {
+    // rotate the session on privilege change to prevent session fixation
+    session.renew();
+
     if let Err(err) = session.insert(SESSION_KEY_USER, user_info) {
         session.destroy();
         error!("user login from '{}': {}", user_info.id, err);
