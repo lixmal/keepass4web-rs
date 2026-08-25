@@ -41,7 +41,7 @@ jobs:
       - name: Build frontend
         run: npm run build
       - name: Build backend
-        run: cargo build
+        run: cargo build --release
       - name: Run Playwright tests
         run: npm test
         env:

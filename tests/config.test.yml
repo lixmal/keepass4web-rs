@@ -23,7 +23,7 @@ cookie_samesite: 'strict'
 
 # Server listen config
 listen: '127.0.0.1'
-port: 8080
+port: 8181
 
 search:
   fields:

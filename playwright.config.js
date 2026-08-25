@@ -1,16 +1,21 @@
 const { defineConfig, devices } = require('@playwright/test');
 
+// Keep in sync with `port` in tests/config.test.yml.
+const baseURL = 'http://localhost:8181';
+
 module.exports = defineConfig({
   testDir: './tests/e2e',
   fullyParallel: false,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
   workers: 1,
+  timeout: 60 * 1000,
   reporter: process.env.CI ? [['html'], ['github']] : 'html',
   use: {
-    baseURL: 'http://localhost:8080',
+    baseURL,
     trace: 'on-first-retry',
     screenshot: 'only-on-failure',
+    permissions: ['clipboard-read', 'clipboard-write'],
   },
 
   projects: [
@@ -21,11 +26,13 @@ module.exports = defineConfig({
   ],
 
   webServer: {
-    command: 'cargo run -- --config ./tests/config.test.yml',
-    url: 'http://localhost:8080',
+    // release build: every test opens the database, and the KDF takes seconds
+    // in a debug build
+    command: 'cargo run --release -- --config ./tests/config.test.yml',
+    url: baseURL,
     reuseExistingServer: !process.env.CI,
     cwd: process.cwd(),
-    timeout: 120 * 1000,
+    timeout: 300 * 1000,
     stdout: 'pipe',
     stderr: 'pipe',
     env: {
