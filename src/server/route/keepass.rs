@@ -131,26 +131,17 @@ async fn get_protected(session: Session, config: Data<Config>, db_cache: Data<Db
 
 #[get("/get_file")]
 async fn get_file(session: Session, config: Data<Config>, db_cache: Data<DbCache>, params: web::Query<File>) -> impl Responder {
-    let keepass = match util::get_db(&session, &config, &db_cache).await {
-        Ok(v) => v,
-        Err(err) => return err,
+    if let Err(err) = util::get_db(&session, &config, &db_cache).await {
+        return err;
     };
 
-    let username = session.get_user_id();
-    let file = match keepass.get_file(&params) {
-        Ok(v) => v,
-        Err(err) => {
-            info!("{}: failed to get file '{}' of entry '{}': {}", username, params.filename, params.entry_id, err);
-            return HttpResponse::InternalServerError().json(json!(
-                {
-                    "success": false,
-                    "message": "failed to get file",
-                }
-            ));
+    info!("{}: file download requested for '{}' of entry '{}', but it is not implemented", session.get_user_id(), params.filename, params.entry_id);
+    HttpResponse::NotImplemented().json(json!(
+        {
+            "success": false,
+            "message": "file download is not implemented yet",
         }
-    };
-
-    HttpResponse::Ok().body(file)
+    ))
 }
 
 #[get("/search_entries")]

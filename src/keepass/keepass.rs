@@ -243,12 +243,6 @@ impl KeePass {
         )
     }
 
-    pub fn get_file(&self, params: &Query<File>) -> Result<Vec<u8>> {
-        let _entry = Self::find_entry_by_id(&self.db.root, &params.entry_id).ok_or(anyhow!("entry not found"))?;
-
-        todo!()
-    }
-
     pub fn search_entries(&self, params: &Query<SearchTerm>) -> Result<EntryGroup> {
         let mut term = params.term.clone();
         if !self.config.search.allow_regex {
