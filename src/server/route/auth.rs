@@ -344,7 +344,7 @@ async fn embed_in_index(success: bool, message: Option<String>, data: Option<Ses
     let mut index = match tokio::fs::read_to_string(INDEX_FILE).await {
         Ok(v) => v,
         Err(err) => {
-            info!("user login from '{}': ", err);
+            error!("failed to read index file: {}", err);
             return HttpResponse::InternalServerError().json(json!(
                 {
                     "success": false,
