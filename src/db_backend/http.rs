@@ -21,6 +21,7 @@ use crate::db_backend::DbBackend;
 
 pub struct Http {
     pub config: http::Http,
+    client: Client,
 }
 
 #[async_trait]
@@ -105,7 +106,9 @@ impl DbBackend for Http {
 impl Http {
     pub fn new(config: &Config) -> Self {
         Self {
-            config: config.http.clone()
+            config: config.http.clone(),
+            // reuse one client for connection pooling and tls session reuse
+            client: Client::new(),
         }
     }
 
@@ -134,9 +137,7 @@ impl Http {
     }
 
     fn get_request(&self, method: Method, url: Url) -> Result<RequestBuilder> {
-        let mut req = Client::builder()
-            .build()?.
-            request(method, url);
+        let mut req = self.client.request(method, url);
 
         if let Some(cred) = &self.config.credentials {
             req = req.basic_auth(cred.username.clone(), cred.password.clone());
