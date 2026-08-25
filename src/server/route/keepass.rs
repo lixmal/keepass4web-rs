@@ -2,15 +2,28 @@ use actix_session::Session;
 use actix_web::{get, HttpResponse, Responder, web};
 use actix_web::web::Data;
 use log::info;
-use mime::IMAGE_PNG;
 use serde_json::json;
 use secrecy::ExposeSecret;
 
 use crate::config::config::Config;
 use crate::keepass::db_cache::DbCache;
-use crate::keepass::keepass::{File, Id, Protected, SearchTerm};
+use crate::keepass::keepass::{File, Id, NotFoundError, Protected, SearchTerm};
 use crate::server::route::util;
 use crate::session::AuthSession;
+
+// 404 for missing entries/groups/icons, 500 for everything else
+fn error_response(err: &anyhow::Error, message: &str) -> HttpResponse {
+    let resp = json!(
+        {
+            "success": false,
+            "message": message,
+        }
+    );
+    if err.downcast_ref::<NotFoundError>().is_some() {
+        return HttpResponse::NotFound().json(resp);
+    }
+    HttpResponse::InternalServerError().json(resp)
+}
 
 #[get("/get_groups")]
 async fn get_groups(session: Session, config: Data<Config>, db_cache: Data<DbCache>) -> impl Responder {
@@ -56,12 +69,7 @@ async fn get_group_entries(session: Session, config: Data<Config>, db_cache: Dat
         Ok(v) => v,
         Err(err) => {
             info!("{}: failed to get entries for group '{}': {}", username, params.id, err);
-            return HttpResponse::InternalServerError().json(json!(
-                {
-                    "success": false,
-                    "message": "failed to get group entries",
-                }
-            ));
+            return error_response(&err, "failed to get group entries");
         }
     };
 
@@ -85,12 +93,7 @@ async fn get_entry(session: Session, config: Data<Config>, db_cache: Data<DbCach
         Ok(v) => v,
         Err(err) => {
             info!("{}: failed to get entry '{}': {}", username, params.id, err);
-            return HttpResponse::InternalServerError().json(json!(
-                {
-                    "success": false,
-                    "message": "failed to get entry",
-                }
-            ));
+            return error_response(&err, "failed to get entry");
         }
     };
 
@@ -114,12 +117,7 @@ async fn get_protected(session: Session, config: Data<Config>, db_cache: Data<Db
         Ok(v) => v,
         Err(err) => {
             info!("{}: failed to get protected '{}' of entry '{}': {}", username, params.name, params.entry_id, err);
-            return HttpResponse::InternalServerError().json(json!(
-                {
-                    "success": false,
-                    "message": "failed to get protected field",
-                }
-            ));
+            return error_response(&err, "failed to get protected field");
         }
     };
 
@@ -201,22 +199,53 @@ async fn get_icon(session: Session, config: Data<Config>, db_cache: Data<DbCache
         Ok(v) => v,
         Err(err) => {
             info!("{}: failed to get icon '{}': {}", username, params.id, err);
-            // TODO: Serve 404 if icon not found
-            return HttpResponse::InternalServerError().json(json!(
-                {
-                    "success": false,
-                    "message": "failed to get icon",
-                }
-            ));
+            return error_response(&err, "failed to get icon");
         }
     };
 
     HttpResponse::Ok()
         // UUID is unique, cache this forever
-        .append_header(("Cache-Control", "max-age=31536000; public; s-max-age=31536000"))
+        .append_header(("Cache-Control", "public, max-age=31536000, s-maxage=31536000, immutable"))
         .append_header(("ETag", icon.uuid.to_string()))
-        // TODO: sniff content type?
-        .content_type(IMAGE_PNG)
+        .content_type(icon_mime(&icon.data))
         .body(icon.data.clone())
+}
+
+fn icon_mime(data: &[u8]) -> &'static str {
+    if data.starts_with(b"\x89PNG\r\n\x1a\n") {
+        "image/png"
+    } else if data.starts_with(b"\xff\xd8\xff") {
+        "image/jpeg"
+    } else if data.starts_with(b"GIF8") {
+        "image/gif"
+    } else if data.starts_with(b"<svg") || data.starts_with(b"<?xml") {
+        "image/svg+xml"
+    } else {
+        // previous behavior, custom icons are usually png
+        "image/png"
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn icon_mime_detection() {
+        assert_eq!(icon_mime(b"\x89PNG\r\n\x1a\nrest"), "image/png");
+        assert_eq!(icon_mime(b"\xff\xd8\xff\xe0rest"), "image/jpeg");
+        assert_eq!(icon_mime(b"GIF89a"), "image/gif");
+        assert_eq!(icon_mime(b"<svg xmlns="), "image/svg+xml");
+        assert_eq!(icon_mime(b"unknown"), "image/png");
+    }
+
+    #[test]
+    fn not_found_maps_to_404() {
+        let err: anyhow::Error = NotFoundError("entry").into();
+        assert_eq!(error_response(&err, "msg").status(), 404);
+
+        let err = anyhow::anyhow!("other");
+        assert_eq!(error_response(&err, "msg").status(), 500);
+    }
 }
 

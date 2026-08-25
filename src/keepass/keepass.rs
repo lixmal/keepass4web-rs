@@ -26,6 +26,19 @@ use crate::keepass::entry::{
 };
 use crate::keepass::key::SecretKey;
 
+// distinguishes missing entries/groups/icons from real server faults,
+// so handlers can return 404 instead of 500
+#[derive(Debug, Clone)]
+pub struct NotFoundError(pub &'static str);
+
+impl std::fmt::Display for NotFoundError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{} not found", self.0)
+    }
+}
+
+impl std::error::Error for NotFoundError {}
+
 #[derive(Deserialize)]
 pub struct Id {
     pub id: Uuid,
@@ -169,7 +182,7 @@ impl KeePass {
     }
 
     pub fn get_group_entries(&self, params: &Query<Id>) -> Result<EntryGroup> {
-        let group = Self::find_group_by_id(&self.db.root, &params.id).ok_or(anyhow!("group not found"))?;
+        let group = Self::find_group_by_id(&self.db.root, &params.id).ok_or(NotFoundError("group"))?;
 
         let mut entries = Vec::with_capacity(group.children.len());
         for node in &group.children {
@@ -202,13 +215,13 @@ impl KeePass {
     }
 
     pub fn get_entry(&self, params: &Query<Id>) -> Result<Entry> {
-        let entry = Self::find_entry_by_id(&self.db.root, &params.id).ok_or(anyhow!("entry not found"))?;
+        let entry = Self::find_entry_by_id(&self.db.root, &params.id).ok_or(NotFoundError("entry"))?;
 
         Ok(entry.into())
     }
 
     pub fn get_protected(&self, params: &Query<Protected>) -> Result<SecretString> {
-        let entry = Self::find_entry_by_id(&self.db.root, &params.entry_id).ok_or(anyhow!("entry not found"))?;
+        let entry = Self::find_entry_by_id(&self.db.root, &params.entry_id).ok_or(NotFoundError("entry"))?;
 
         let field = match params.name.as_str() {
             "password" => entry.fields.get("Password").cloned(),
@@ -220,7 +233,7 @@ impl KeePass {
                 Value::Protected(p) => p,
                 _ => bail!("not a protected field"),
             },
-            None => bail!("field not found"),
+            None => return Err(NotFoundError("field").into()),
         };
 
         Ok(
@@ -261,7 +274,7 @@ impl KeePass {
             }
         }
 
-        bail!("icon not found")
+        Err(NotFoundError("icon").into())
     }
 
     pub(crate) fn find_all_groups(group: &keepass::db::Group) -> Group {
