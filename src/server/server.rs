@@ -2,6 +2,7 @@ use actix_session::{config::PersistentSession, SessionMiddleware, storage::Cooki
 use actix_web::{App, HttpServer, web};
 use actix_web::cookie::time::Duration;
 use actix_web::middleware::{DefaultHeaders, Logger};
+use log::warn;
 use anyhow::Result;
 use env_logger::Env;
 
@@ -18,6 +19,13 @@ impl Server {
         let server = config.listen.clone();
         let port = config.port;
         env_logger::init_from_env(Env::default().default_filter_or("info"));
+
+        // the downgrade belongs in the log, not only in a config file someone
+        // edited once
+        #[cfg(target_os = "linux")]
+        if !config.use_keyring {
+            warn!("use_keyring is off: database keys are held in process memory instead of the kernel keyring");
+        }
 
         let secret_key = config.session_secret_key.0.clone();
         let config_data = web::Data::new(config);
