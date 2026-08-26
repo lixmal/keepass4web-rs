@@ -1,5 +1,7 @@
 const { test, expect } = require('@playwright/test');
-const { DB, LOGIN_TIMEOUT, gotoLogin, openDb, treeNode, treeNodes, treeRoot } = require('./helpers');
+const {
+  DB, LOGIN_TIMEOUT, gotoLogin, loginError, openDb, treeNode, treeNodes, treeRoot,
+} = require('./helpers');
 
 test.describe('Opening the database', () => {
   test('sends an unauthenticated visitor to the master password form', async ({ page }) => {
@@ -50,7 +52,7 @@ test.describe('Opening the database', () => {
     await page.getByPlaceholder('Master Password').fill('not the master password');
     await page.getByRole('button', { name: 'Open Vault' }).click();
 
-    await expect(page.locator('.login-error')).toBeVisible({ timeout: LOGIN_TIMEOUT });
+    await expect(loginError(page)).toBeVisible({ timeout: LOGIN_TIMEOUT });
     await expect(page).toHaveURL(/\/db_login/);
     await expect(treeNodes(page)).toHaveCount(0);
   });
@@ -59,7 +61,7 @@ test.describe('Opening the database', () => {
     await gotoLogin(page);
     await page.getByRole('button', { name: 'Open Vault' }).click();
 
-    await expect(page.locator('.login-error')).toBeVisible({ timeout: LOGIN_TIMEOUT });
+    await expect(loginError(page)).toBeVisible({ timeout: LOGIN_TIMEOUT });
     await expect(page).toHaveURL(/\/db_login/);
   });
 
@@ -67,7 +69,7 @@ test.describe('Opening the database', () => {
     await gotoLogin(page);
     await page.getByPlaceholder('Master Password').fill('not the master password');
     await page.getByRole('button', { name: 'Open Vault' }).click();
-    await expect(page.locator('.login-error')).toBeVisible({ timeout: LOGIN_TIMEOUT });
+    await expect(loginError(page)).toBeVisible({ timeout: LOGIN_TIMEOUT });
 
     await openDb(page);
   });

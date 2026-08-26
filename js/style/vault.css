@@ -860,6 +860,25 @@ textarea.kp-input {
 /* dark login card */
 [data-theme="dark"] .kp-login { background: var(--kp-surface); }
 
+/* ─── LOGIN ALERTS (replaces Bootstrap alert-danger / alert-info) */
+.kp-login-alert {
+  padding: 10px 14px;
+  border-radius: var(--kp-r);
+  font-size: 13px;
+  line-height: 1.5;
+  border: 1px solid transparent;
+}
+.kp-login-alert-error {
+  background: var(--kp-danger-bg);
+  border-color: var(--kp-danger);
+  color: var(--kp-danger);
+}
+.kp-login-alert-info {
+  background: var(--kp-primary-bg);
+  border-color: var(--kp-focus);
+  color: var(--kp-primary);
+}
+
 /* ─── THEME TOGGLE BUTTON ────────────────────────────────── */
 .kp-theme-toggle {
   width: 32px; height: 32px;

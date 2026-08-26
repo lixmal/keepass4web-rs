@@ -98,6 +98,10 @@ const copyButton = (page, label) => fieldRow(page, label).locator('[data-testid=
 const expectRevealed = (page, label, revealed) =>
   expect(revealButton(page, label)).toHaveAttribute('data-revealed', String(revealed));
 
+// The login pages report failures through an ARIA alert rather than through a
+// class of their own.
+const loginError = (page) => page.getByRole('alert');
+
 const clipboard = (page) => page.evaluate(() => navigator.clipboard.readText());
 
 async function expectClipboard(page, value) {
@@ -121,6 +125,7 @@ module.exports = {
   fieldValue,
   gotoLogin,
   groupTitle,
+  loginError,
   openDb,
   openEntry,
   revealButton,

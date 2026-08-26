@@ -78,7 +78,7 @@ class NavBar extends React.Component {
     render() {
         const cn = KeePass4Web.getSettings().cn
         const loc = this.props.location
-        const isVault = loc && loc.pathname !== '/backend_login' && loc.pathname !== '/db_login'
+        const isVault = loc && !['/backend_login', '/db_login', '/user_login'].includes(loc.pathname)
 
         // Only render the full vault nav when logged in and past login screens
         if (!cn) {

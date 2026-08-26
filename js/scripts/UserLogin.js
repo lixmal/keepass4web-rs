@@ -3,8 +3,8 @@ import LoginForm from './LoginForm'
 import NavBar from './NavBar'
 import Alert from './Alert'
 import Info from './Info'
-
 import withNavigateHook from './nagivateHook'
+import { IconShield, IconKey, IconUser } from './Icons'
 
 class UserLogin extends LoginForm {
     constructor() {
@@ -24,14 +24,49 @@ class UserLogin extends LoginForm {
                 <div className="container">
                     <div className={this.classes()}>
                         <form className="kp-login-inner" onSubmit={this.handleLogin}>
-                            <h4>User Login</h4>
-                            <input className="form-control user" autoComplete="on" type="text" ref="username"
-                                   placeholder="Username" required="required"
-                                   autoFocus={this.state.error ? '' : 'autoFocus'}/>
-                            <input className="form-control password" type="password" ref="password"
-                                   placeholder="Password" required="required"
-                                   autoFocus={this.state.error ? 'autoFocus' : ''}/>
-                            <button className="btn btn-block btn-lg btn-success" type="submit">Login</button>
+                            <div className="kp-login-icon">
+                                <IconShield size={28}/>
+                            </div>
+                            <h4>Sign In</h4>
+                            <p className="kp-login-sub">Enter your credentials to continue</p>
+
+                            <div className="kp-login-field">
+                                <label htmlFor="kp-ul-username">
+                                    <IconUser size={13}/>
+                                    Username
+                                </label>
+                                <input
+                                    id="kp-ul-username"
+                                    className="kp-input"
+                                    autoComplete="on"
+                                    type="text"
+                                    ref="username"
+                                    placeholder="Username"
+                                    required
+                                    autoFocus={!this.state.error}
+                                />
+                            </div>
+
+                            <div className="kp-login-field">
+                                <label htmlFor="kp-ul-password">
+                                    <IconKey size={13}/>
+                                    Password
+                                </label>
+                                <input
+                                    id="kp-ul-password"
+                                    className="kp-input"
+                                    type="password"
+                                    ref="password"
+                                    placeholder="Password"
+                                    required
+                                    autoFocus={!!this.state.error}
+                                />
+                            </div>
+
+                            <button className="kp-btn kp-btn-primary kp-btn-open" type="submit">
+                                Sign In
+                            </button>
+
                             <Alert error={this.state.error}/>
                             <Info info={this.props.location.state && this.props.location.state.info}/>
                         </form>
