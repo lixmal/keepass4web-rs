@@ -38,6 +38,11 @@ pub struct Config {
     // only enable behind a reverse proxy: forwarding headers are
     // client-controlled and would let rate limiting be evaded
     pub trust_proxy_headers: bool,
+    // use the linux kernel keyring for session key storage (linux only).
+    // set to false if your container runtime blocks keyctl/add_key/request_key
+    // (e.g. docker desktop on macos without a custom seccomp profile).
+    // ignored on non-linux platforms, which always use the in-memory store.
+    pub use_keyring: bool,
     pub search: Search,
     #[serde(alias = "LDAP", alias = "Ldap")]
     pub ldap: Ldap,
@@ -67,6 +72,7 @@ impl Default for Config {
             session_lifetime: Duration::from_secs(60 * 60),
             cookie_samesite: cookie::SameSite::Strict,
             trust_proxy_headers: false,
+            use_keyring: true,
             search: Default::default(),
             ldap: Default::default(),
             oidc: Default::default(),

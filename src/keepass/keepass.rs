@@ -373,8 +373,9 @@ mod tests {
 
         let (mut key, enc) = keepass.to_enc().unwrap();
 
-        key.store(config.db_session_timeout).unwrap();
-        let ret_key = SecretKey::retrieve(&key.key_id, config.db_session_timeout).unwrap();
+        // tests always use the in-memory store; the keyring is unavailable in most CI/test environments
+        key.store(config.db_session_timeout, false).unwrap();
+        let ret_key = SecretKey::retrieve(&key.key_id, config.db_session_timeout, false).unwrap();
 
         let dec = KeePass::from_enc(&config, ret_key, enc).unwrap();
 

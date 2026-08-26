@@ -9,13 +9,9 @@ use crate::auth::gen_token;
 
 #[cfg(target_os = "linux")]
 mod keyring;
-#[cfg(target_os = "linux")]
-use keyring as store;
 
-#[cfg(any(not(target_os = "linux"), test))]
-mod memory;
-#[cfg(not(target_os = "linux"))]
-use memory as store;
+// always compiled: used on non-linux, in tests, and when use_keyring=false on linux
+pub(super) mod memory;
 
 pub type KeyId = String;
 
@@ -38,6 +34,7 @@ pub struct SecretKey {
     pub key_id: KeyId,
     data: SecretBox<[u8]>,
     timeout: Duration,
+    use_keyring: bool,
 }
 
 impl SecretKey {
@@ -46,23 +43,26 @@ impl SecretKey {
             key_id: gen_token(ID_LENGTH),
             data: SecretBox::new(secret),
             timeout: Duration::default(),
+            use_keyring: false,
         }
     }
 
-    pub fn retrieve(key_id: &KeyId, timeout: Duration) -> Result<Self> {
-        let data = store::retrieve(key_id, timeout)?;
+    pub fn retrieve(key_id: &KeyId, timeout: Duration, use_keyring: bool) -> Result<Self> {
+        let data = Self::dispatch_retrieve(key_id, timeout, use_keyring)?;
 
         Ok(
             Self {
                 key_id: key_id.clone(),
                 data: SecretBox::new(data),
                 timeout,
+                use_keyring,
             }
         )
     }
 
-    pub fn store(&mut self, timeout: Duration) -> Result<&mut Self> {
-        store::store(&self.key_id, self.expose_secret(), timeout)?;
+    pub fn store(&mut self, timeout: Duration, use_keyring: bool) -> Result<&mut Self> {
+        self.use_keyring = use_keyring;
+        Self::dispatch_store(&self.key_id, self.expose_secret(), timeout, use_keyring)?;
 
         self.timeout = timeout;
         Ok(self)
@@ -70,9 +70,51 @@ impl SecretKey {
 
     // retrieve will fail after revoke
     pub fn revoke(&mut self) -> Result<&mut Self> {
-        store::revoke(&self.key_id)?;
+        Self::dispatch_revoke(&self.key_id, self.use_keyring)?;
 
         Ok(self)
+    }
+
+    #[cfg(target_os = "linux")]
+    fn dispatch_store(key_id: &str, secret: &[u8], timeout: Duration, use_keyring: bool) -> Result<()> {
+        if use_keyring {
+            keyring::store(key_id, secret, timeout)
+        } else {
+            memory::store(key_id, secret, timeout)
+        }
+    }
+
+    #[cfg(not(target_os = "linux"))]
+    fn dispatch_store(key_id: &str, secret: &[u8], timeout: Duration, _use_keyring: bool) -> Result<()> {
+        memory::store(key_id, secret, timeout)
+    }
+
+    #[cfg(target_os = "linux")]
+    fn dispatch_retrieve(key_id: &str, timeout: Duration, use_keyring: bool) -> Result<Box<[u8]>> {
+        if use_keyring {
+            keyring::retrieve(key_id, timeout)
+        } else {
+            memory::retrieve(key_id, timeout)
+        }
+    }
+
+    #[cfg(not(target_os = "linux"))]
+    fn dispatch_retrieve(key_id: &str, timeout: Duration, _use_keyring: bool) -> Result<Box<[u8]>> {
+        memory::retrieve(key_id, timeout)
+    }
+
+    #[cfg(target_os = "linux")]
+    fn dispatch_revoke(key_id: &str, use_keyring: bool) -> Result<()> {
+        if use_keyring {
+            keyring::revoke(key_id)
+        } else {
+            memory::revoke(key_id)
+        }
+    }
+
+    #[cfg(not(target_os = "linux"))]
+    fn dispatch_revoke(key_id: &str, _use_keyring: bool) -> Result<()> {
+        memory::revoke(key_id)
     }
 }
 
@@ -95,8 +137,8 @@ mod tests {
     #[test]
     fn key_roundtrip() {
         let mut key = SecretKey::new("some random string !@(as+=!#@_%$".to_string().into_bytes().into_boxed_slice());
-        key.store(Duration::from_secs(10)).unwrap();
-        let data = SecretKey::retrieve(&key.key_id, Duration::from_secs(10)).unwrap();
+        key.store(Duration::from_secs(10), false).unwrap();
+        let data = SecretKey::retrieve(&key.key_id, Duration::from_secs(10), false).unwrap();
 
         assert_eq!(key.expose_secret(), data.expose_secret());
     }
@@ -106,8 +148,8 @@ mod tests {
     fn key_roundtrip_other_lengths() {
         for secret in [&b"short"[..], &[7u8; 64][..]] {
             let mut key = SecretKey::new(secret.to_vec().into_boxed_slice());
-            key.store(Duration::from_secs(10)).unwrap();
-            let data = SecretKey::retrieve(&key.key_id, Duration::from_secs(10)).unwrap();
+            key.store(Duration::from_secs(10), false).unwrap();
+            let data = SecretKey::retrieve(&key.key_id, Duration::from_secs(10), false).unwrap();
 
             assert_eq!(key.expose_secret(), data.expose_secret());
         }

@@ -110,6 +110,10 @@ This is best achieved by running rootless containers with a dedicated user for k
 - [Docker](https://docs.docker.com/engine/security/rootless/)
 - [podman](https://github.com/containers/podman/blob/main/docs/tutorials/rootless_tutorial.md)
 
+Where a seccomp profile is not an option, `use_keyring: false` falls back to keeping the keys in the process memory of
+the app instead of the kernel keyring. That is weaker: the pages are not locked, so a key can reach swap or a core dump,
+and it is logged as a warning on startup. Prefer the seccomp profile above where you can.
+
 Example docker:
 
     docker run \

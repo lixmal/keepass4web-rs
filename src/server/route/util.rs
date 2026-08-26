@@ -1,6 +1,7 @@
 use actix_session::Session;
 use actix_web::HttpResponse;
 use anyhow::{anyhow, bail};
+use linux_keyutils::KeyError;
 use log::{error, info};
 use serde_json::json;
 
@@ -9,7 +10,7 @@ use crate::auth_backend::UserInfo;
 use crate::config::config::Config;
 use crate::keepass::db_cache::{CacheExpiredError, DbCache};
 use crate::keepass::keepass::KeePass;
-use crate::keepass::key::{KeyId, KeyUnavailableError, SecretKey};
+use crate::keepass::key::{KeyId, SecretKey};
 use crate::session::AuthSession;
 
 pub const SESSION_KEY_KEY_ID: &str = "key_id";
@@ -124,7 +125,7 @@ pub(crate) async fn get_db(session: &Session, config: &Config, db_cache: &DbCach
                 }
             );
 
-            return match err.downcast_ref::<KeyUnavailableError>() {
+            return match err.downcast_ref::<KeyError>() {
                 Some(_) => {
                     _close_db(session, config, db_cache).await?;
 
@@ -166,11 +167,11 @@ pub(crate) fn retrieve_key(config: &Config, session: &Session) -> anyhow::Result
     let key_id = session.get::<KeyId>(SESSION_KEY_KEY_ID)?
         .ok_or(anyhow!("failed to retrieve key id from session"))?;
 
-    SecretKey::retrieve(&key_id, config.db_session_timeout)
+    SecretKey::retrieve(&key_id, config.db_session_timeout, config.use_keyring)
 }
 
 pub(crate) fn store_key(config: &Config, session: &Session, mut key: SecretKey) -> anyhow::Result<()> {
-    key.store(config.db_session_timeout)?;
+    key.store(config.db_session_timeout, config.use_keyring)?;
     session.insert(SESSION_KEY_KEY_ID, key.key_id)?;
 
     Ok(())
@@ -196,9 +197,12 @@ pub(crate) fn revoke_key(config: &Config, session: &Session) -> anyhow::Result<(
 fn check_key_err<F>(ok: F, err: anyhow::Error) -> anyhow::Result<()>
     where F: Fn() -> anyhow::Result<()>
 {
-    // Ignore non-existent, expired or already revoked
-    match err.downcast_ref::<KeyUnavailableError>() {
-        Some(_) => ok(),
+    match err.downcast_ref::<KeyError>() {
+        Some(e) => match e {
+            // Ignore non-existent, expired or already revoked
+            KeyError::KeyDoesNotExist | KeyError::KeyExpired | KeyError::KeyRevoked => ok(),
+            _ => Err(err),
+        }
         None => Err(err),
     }
 }
