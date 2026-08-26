@@ -5,9 +5,11 @@ use std::path::{Path, PathBuf};
 use std::pin::Pin;
 use std::task::{Context, Poll};
 
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, bail, Result};
 use async_trait::async_trait;
-use tokio::fs::File;
+use rand::distributions::{Alphanumeric, DistString};
+use rand::thread_rng;
+use tokio::fs::{File, OpenOptions};
 use tokio::io::{AsyncRead, AsyncWrite, AsyncWriteExt};
 use tokio::sync::oneshot::Receiver;
 
@@ -107,17 +109,40 @@ impl AtomicFile {
         let file_name = target.file_name()
             .ok_or(anyhow!("database location has no file name: {}", target.display()))?;
 
-        let mut tmp_name = file_name.to_os_string();
-        tmp_name.push(format!(".tmp{}", std::process::id()));
-        let tmp_path = target.with_file_name(tmp_name);
+        // a database is not world readable, and the mode of the file that is
+        // replaced has to survive the replacement
+        #[cfg(unix)]
+        let mode = match tokio::fs::metadata(target).await {
+            Ok(meta) => std::os::unix::fs::PermissionsExt::mode(&meta.permissions()) & 0o7777,
+            Err(_) => 0o600,
+        };
 
-        Ok(
-            Self {
-                state: State::Writing(File::create(&tmp_path).await?),
-                tmp_path,
-                target: target.to_path_buf(),
-            }
-        )
+        // a random name opened exclusively, so two writers of the same database
+        // cannot end up sharing one temporary file
+        for _ in 0..16 {
+            let mut tmp_name = file_name.to_os_string();
+            tmp_name.push(format!(".tmp{}", Alphanumeric.sample_string(&mut thread_rng(), 8)));
+            let tmp_path = target.with_file_name(tmp_name);
+
+            let file = match OpenOptions::new().write(true).create_new(true).open(&tmp_path).await {
+                Ok(file) => file,
+                Err(err) if err.kind() == std::io::ErrorKind::AlreadyExists => continue,
+                Err(err) => return Err(err.into()),
+            };
+
+            #[cfg(unix)]
+            tokio::fs::set_permissions(&tmp_path, std::os::unix::fs::PermissionsExt::from_mode(mode)).await?;
+
+            return Ok(
+                Self {
+                    state: State::Writing(file),
+                    tmp_path,
+                    target: target.to_path_buf(),
+                }
+            );
+        }
+
+        bail!("failed to create a temporary file next to {}", target.display())
     }
 }
 
@@ -262,6 +287,74 @@ mod tests {
             .filter(|name| name.starts_with("k4w-filesystem-abandoned-test.kdbx.tmp"))
             .collect();
         assert!(leftovers.is_empty(), "temporary files left behind: {:?}", leftovers);
+
+        let _ = tokio::fs::remove_file(&path).await;
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn the_mode_of_the_replaced_database_is_kept() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let path = std::env::temp_dir().join("k4w-filesystem-mode-test.kdbx");
+        tokio::fs::write(&path, b"previous database").await.unwrap();
+        tokio::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600)).await.unwrap();
+        let mut backend = backend_for(&path);
+
+        let (mut writer, _) = backend.get_db_write(&UserInfo::default()).await.unwrap();
+        writer.write_all(b"new database").await.unwrap();
+        writer.shutdown().await.unwrap();
+
+        let mode = tokio::fs::metadata(&path).await.unwrap().permissions().mode() & 0o7777;
+        assert_eq!(mode, 0o600, "mode after replacement: {:o}", mode);
+
+        let _ = tokio::fs::remove_file(&path).await;
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn a_new_database_is_not_world_readable() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let path = std::env::temp_dir().join("k4w-filesystem-new-mode-test.kdbx");
+        let _ = tokio::fs::remove_file(&path).await;
+        let mut backend = backend_for(&path);
+
+        let (mut writer, _) = backend.get_db_write(&UserInfo::default()).await.unwrap();
+        writer.write_all(b"new database").await.unwrap();
+        writer.shutdown().await.unwrap();
+
+        let mode = tokio::fs::metadata(&path).await.unwrap().permissions().mode() & 0o7777;
+        assert_eq!(mode, 0o600, "mode of a fresh database: {:o}", mode);
+
+        let _ = tokio::fs::remove_file(&path).await;
+    }
+
+    #[tokio::test]
+    async fn concurrent_writers_do_not_share_a_temporary_file() {
+        let path = std::env::temp_dir().join("k4w-filesystem-concurrent-test.kdbx");
+        tokio::fs::write(&path, b"previous database").await.unwrap();
+
+        let first = async {
+            let mut backend = backend_for(&path);
+            let (mut writer, _) = backend.get_db_write(&UserInfo::default()).await.unwrap();
+            writer.write_all(&[b'a'; 4096]).await.unwrap();
+            writer.shutdown().await.unwrap();
+        };
+        let second = async {
+            let mut backend = backend_for(&path);
+            let (mut writer, _) = backend.get_db_write(&UserInfo::default()).await.unwrap();
+            writer.write_all(&[b'b'; 4096]).await.unwrap();
+            writer.shutdown().await.unwrap();
+        };
+        tokio::join!(first, second);
+
+        // whichever renamed last wins, but the result is one whole write
+        let written = tokio::fs::read(&path).await.unwrap();
+        assert!(
+            written == vec![b'a'; 4096] || written == vec![b'b'; 4096],
+            "database holds a mix of both writes ({} bytes)", written.len(),
+        );
 
         let _ = tokio::fs::remove_file(&path).await;
     }
