@@ -11,7 +11,7 @@ function generatePassword(length = 20) {
 }
 
 function iconSrc(id) {
-    return `img/icons/${id}.png`
+    return `assets/img/icons/${id}.png`
 }
 
 class EntryForm extends React.Component {
