@@ -2,13 +2,14 @@ use std::collections::HashMap;
 use std::error::Error;
 use std::fmt::{Debug, Display, Formatter};
 use std::ops::Deref;
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use actix_session::Session;
 use anyhow::anyhow;
 use anyhow::Result;
 use log::info;
-use tokio::sync::RwLock;
+use tokio::sync::{Mutex, OwnedMutexGuard, RwLock};
 
 use crate::auth::SESSION_KEY_USER;
 use crate::auth_backend::UserInfo;
@@ -31,6 +32,8 @@ impl Error for CacheExpiredError {}
 #[derive(Default)]
 pub struct DbCache {
     lock: RwLock<HashMap<String, Encrypted>>,
+    // one lock per user, held across a read-modify-write of their database
+    mutations: RwLock<HashMap<String, Arc<Mutex<()>>>>,
 }
 
 impl Deref for DbCache {
@@ -42,6 +45,26 @@ impl Deref for DbCache {
 }
 
 impl DbCache {
+    // A modification decrypts the database, changes it and encrypts it again.
+    // Two of them running at once would each start from the same copy and the
+    // second would write over the first, so they take turns per user.
+    pub async fn mutation_guard(&self, session: &Session) -> Result<OwnedMutexGuard<()>> {
+        let user = self.get_user(session)?;
+
+        let mutex = {
+            let existing = self.mutations.read().await.get(&user).cloned();
+            match existing {
+                Some(mutex) => mutex,
+                None => self.mutations.write().await
+                    .entry(user)
+                    .or_default()
+                    .clone(),
+            }
+        };
+
+        Ok(mutex.lock_owned().await)
+    }
+
     pub async fn store(&self, session: &Session, enc_db: Encrypted) -> Result<()> {
         let user = self.get_user(session)?;
         let mut cache = self.write().await;
@@ -116,5 +139,52 @@ mod tests {
         let entries = cache.read().await;
         assert!(entries.contains_key("alice"));
         assert!(!entries.contains_key("bob"));
+    }
+
+    #[tokio::test]
+    async fn one_mutation_of_a_database_waits_for_the_other() {
+        let cache = DbCache::default();
+        let req = TestRequest::default().to_http_request();
+        let session = req.get_session();
+        session.insert(SESSION_KEY_USER, UserInfo {
+            id: "alice".to_string(),
+            ..Default::default()
+        }).unwrap();
+
+        let first = cache.mutation_guard(&session).await.unwrap();
+
+        // the second one cannot start while the first holds the lock
+        let second = tokio::time::timeout(
+            Duration::from_millis(50),
+            cache.mutation_guard(&session),
+        ).await;
+        assert!(second.is_err(), "a second mutation started while the first was running");
+
+        drop(first);
+        assert!(cache.mutation_guard(&session).await.is_ok());
+    }
+
+    #[tokio::test]
+    async fn mutations_of_different_databases_do_not_wait_for_each_other() {
+        let cache = DbCache::default();
+
+        let session_of = |name: &str| {
+            let req = TestRequest::default().to_http_request();
+            let session = req.get_session();
+            session.insert(SESSION_KEY_USER, UserInfo {
+                id: name.to_string(),
+                ..Default::default()
+            }).unwrap();
+            session
+        };
+
+        let alice = session_of("alice");
+        let bob = session_of("bob");
+
+        let _held = cache.mutation_guard(&alice).await.unwrap();
+        assert!(
+            tokio::time::timeout(Duration::from_millis(50), cache.mutation_guard(&bob)).await.is_ok(),
+            "bob waited for alice",
+        );
     }
 }
