@@ -7,7 +7,7 @@ pub struct Test;
 
 #[async_trait]
 impl AuthBackend for Test {
-    fn get_login_type(&self, _: &str, _: &AuthCache) -> Result<LoginType> {
+    async fn get_login_type(&self, _: &str, _: &AuthCache) -> Result<LoginType> {
         Ok(LoginType::Mask)
     }
 

@@ -299,7 +299,7 @@ async fn logout(request: HttpRequest, session: Session, config: Data<Config>, db
     };
 
     let host = format!("{}://{}", request.connection_info().scheme(), request.connection_info().host());
-    let logout_type = match auth_backend::new(&config).get_logout_type(&user_info, &host, &auth_cache) {
+    let logout_type = match auth_backend::new(&config).get_logout_type(&user_info, &host, &auth_cache).await {
         Ok(logout_type) => logout_type,
         Err(err) => {
             error!("failed to determine logout type: {}", err);
