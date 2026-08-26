@@ -104,9 +104,8 @@
   overflow: hidden;
 }
 
-/* override the Bootstrap body padding when inside the vault */
+/* the vault fills the viewport, the pages around it scroll normally */
 body:has(.kp-app) {
-  padding-top: 0 !important;
   overflow: hidden;
 }
 
