@@ -38,6 +38,8 @@ Written in Rust and JavaScript.
 
 ![App](doc/img/app.png)
 
+![App in the dark theme](doc/img/app-dark.png)
+
 ## INSTALL
 
 - From container image:
