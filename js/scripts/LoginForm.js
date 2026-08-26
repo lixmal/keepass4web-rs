@@ -6,6 +6,7 @@ export default class LoginForm extends React.Component {
     constructor(props) {
         super(props)
         this.handleLogin = this.handleLogin.bind(this)
+        this.formRefs = {}
         this.abortRequests = this.abortRequests.bind(this)
         this.state = {
             error: null,
@@ -16,8 +17,8 @@ export default class LoginForm extends React.Component {
     transformRefs(tRefs) {
         let refs = {}
         for (let property in tRefs) {
-            if (tRefs.hasOwnProperty(property)) {
-                refs[property] = tRefs[property].value
+            if (tRefs.hasOwnProperty(property) && tRefs[property].current) {
+                refs[property] = tRefs[property].current.value
             }
         }
 
@@ -58,7 +59,7 @@ export default class LoginForm extends React.Component {
                     KeePass4Web.setSettings(data.settings)
                 }
             }.bind(this),
-            data: this.transformRefs(this.refs),
+            data: this.transformRefs(this.formRefs),
             error: function (error) {
                 this.setState({
                     error: error.toString(),

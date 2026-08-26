@@ -22,6 +22,8 @@ class BackendLogin extends LoginForm {
         for (const i in tpl.fields) {
             const field = tpl.fields[i]
             const isPassword = field.type === 'password'
+            if (!this.formRefs[field.field])
+                this.formRefs[field.field] = React.createRef()
             fields.push(
                 <div className="kp-login-field" key={field.field}>
                     <label htmlFor={`kp-bl-${field.field}`}>
@@ -32,7 +34,7 @@ class BackendLogin extends LoginForm {
                         id={`kp-bl-${field.field}`}
                         className="kp-input"
                         type={field.type}
-                        ref={field.field}
+                        ref={this.formRefs[field.field]}
                         placeholder={field.placeholder || ''}
                         required={!!field.required}
                         autoFocus={!!field.autofocus}
