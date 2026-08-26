@@ -169,7 +169,22 @@ impl Oidc {
             .error_for_status()?
             .text()
             .await?;
-        Ok(serde_json::from_str(&body)?)
+        let metadata: ProviderMetadataWithLogout = serde_json::from_str(&body)?;
+
+        // discover_async checks this and fetching from another url must not
+        // lose it: the fetch address is an internal detail, the issuer is what
+        // the tokens are trusted against, and the document names the jwks the
+        // app would verify them with
+        let issuer = self.config.issuer.clone()
+            .ok_or(anyhow!("issuer must be set to fetch metadata from discovery_url"))?;
+        if metadata.issuer().as_str().trim_end_matches('/') != issuer.as_str().trim_end_matches('/') {
+            bail!(
+                "provider metadata declares issuer '{}', expected '{}'",
+                metadata.issuer().as_str(), issuer.as_str(),
+            );
+        }
+
+        Ok(metadata)
     }
 
     async fn get_metadata(&self, cache: &AuthCache, force_refresh: bool) -> Result<ProviderMetadataWithLogout> {
@@ -430,5 +445,46 @@ mod tests {
             LoginType::Redirect { url, .. } => assert!(url.as_str().starts_with(&format!("{}auth", issuer))),
             _ => panic!("expected redirect login type"),
         }
+    }
+
+    #[tokio::test]
+    async fn metadata_from_discovery_url_must_name_the_configured_issuer() {
+        let mut server = mockito::Server::new_async().await;
+        let issuer = "https://issuer.example.org/";
+
+        let mut config = Config::default();
+        config.oidc.issuer = Some(Url::from_str(issuer).unwrap());
+        config.oidc.discovery_url = Some(Url::from_str(&format!("{}/metadata", server.url())).unwrap());
+        config.oidc.client_id = "test-client".to_string();
+        config.oidc.client_secret = "test-secret".to_string();
+        let oidc = Oidc::new(&config);
+
+        let metadata = |declared: &str| json!({
+            "issuer": declared,
+            "authorization_endpoint": format!("{}auth", declared),
+            "token_endpoint": format!("{}token", declared),
+            "jwks_uri": format!("{}jwks", declared),
+            "response_types_supported": ["code"],
+            "subject_types_supported": ["public"],
+            "id_token_signing_alg_values_supported": ["RS256"],
+        });
+
+        // a document naming somebody else's issuer brings its own jwks with it
+        let elsewhere = server.mock("GET", "/metadata")
+            .with_header("content-type", "application/json")
+            .with_body(metadata("https://attacker.example.org/").to_string())
+            .create_async().await;
+
+        let cache: AuthCache = Box::new(MetadataCache::default());
+        assert!(oidc.get_metadata(&cache, true).await.is_err());
+        elsewhere.assert_async().await;
+
+        let matching = server.mock("GET", "/metadata")
+            .with_header("content-type", "application/json")
+            .with_body(metadata(issuer).to_string())
+            .create_async().await;
+
+        assert!(oidc.get_metadata(&cache, true).await.is_ok());
+        matching.assert_async().await;
     }
 }
