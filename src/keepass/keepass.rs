@@ -212,6 +212,7 @@ impl KeePass {
         password: &str,
         url: &str,
         notes: &str,
+        icon: Option<usize>,
     ) -> Result<Uuid> {
         let group = Self::find_group_by_id_mut(&mut self.db.root, group_id)
             .ok_or(NotFoundError("group"))?;
@@ -224,6 +225,7 @@ impl KeePass {
         }
         entry.fields.insert("URL".to_string(), Value::Unprotected(url.to_string()));
         entry.fields.insert("Notes".to_string(), Value::Unprotected(notes.to_string()));
+        entry.icon_id = icon;
 
         let uuid = entry.uuid;
         group.add_child(entry);
@@ -238,6 +240,7 @@ impl KeePass {
         password: &str,
         url: &str,
         notes: &str,
+        icon: Option<usize>,
     ) -> Result<()> {
         let entry = Self::find_entry_by_id_mut(&mut self.db.root, entry_id)
             .ok_or(NotFoundError("entry"))?;
@@ -249,6 +252,9 @@ impl KeePass {
         }
         entry.fields.insert("URL".to_string(), Value::Unprotected(url.to_string()));
         entry.fields.insert("Notes".to_string(), Value::Unprotected(notes.to_string()));
+        if let Some(id) = icon {
+            entry.icon_id = Some(id);
+        }
 
         Ok(())
     }

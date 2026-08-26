@@ -1,5 +1,5 @@
 const { test, expect } = require('@playwright/test');
-const { DB, LOGIN_TIMEOUT, gotoLogin, openDb, treeNode } = require('./helpers');
+const { DB, LOGIN_TIMEOUT, gotoLogin, openDb, treeNode, treeNodes, treeRoot } = require('./helpers');
 
 test.describe('Opening the database', () => {
   test('sends an unauthenticated visitor to the master password form', async ({ page }) => {
@@ -7,7 +7,7 @@ test.describe('Opening the database', () => {
 
     await expect(page).toHaveURL(/\/db_login$/);
     await expect(page.getByPlaceholder('Master Password')).toBeFocused();
-    await expect(page.getByRole('button', { name: 'Open' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Open Vault' })).toBeVisible();
   });
 
   test('sends a visitor asking for /keepass to the login form as well', async ({ page }) => {
@@ -20,8 +20,8 @@ test.describe('Opening the database', () => {
     await openDb(page);
 
     await expect(page).toHaveURL(/\/keepass$/);
-    await expect(page.locator('.treeview-header')).toHaveText(DB.root);
-    await expect(page.locator('.treeview-body .list-group-item')).toHaveCount(DB.groups.length);
+    await expect(treeRoot(page)).toHaveText(DB.root);
+    await expect(treeNodes(page)).toHaveCount(DB.groups.length);
   });
 
   test('stores the CSRF token and the session settings for later requests', async ({ page }) => {
@@ -48,16 +48,16 @@ test.describe('Opening the database', () => {
   test('rejects a wrong master password and stays on the login form', async ({ page }) => {
     await gotoLogin(page);
     await page.getByPlaceholder('Master Password').fill('not the master password');
-    await page.getByRole('button', { name: 'Open' }).click();
+    await page.getByRole('button', { name: 'Open Vault' }).click();
 
     await expect(page.locator('.login-error')).toBeVisible({ timeout: LOGIN_TIMEOUT });
     await expect(page).toHaveURL(/\/db_login/);
-    await expect(page.locator('.treeview-body')).toHaveCount(0);
+    await expect(treeNodes(page)).toHaveCount(0);
   });
 
   test('rejects an empty master password', async ({ page }) => {
     await gotoLogin(page);
-    await page.getByRole('button', { name: 'Open' }).click();
+    await page.getByRole('button', { name: 'Open Vault' }).click();
 
     await expect(page.locator('.login-error')).toBeVisible({ timeout: LOGIN_TIMEOUT });
     await expect(page).toHaveURL(/\/db_login/);
@@ -66,7 +66,7 @@ test.describe('Opening the database', () => {
   test('opens the database after a failed attempt', async ({ page }) => {
     await gotoLogin(page);
     await page.getByPlaceholder('Master Password').fill('not the master password');
-    await page.getByRole('button', { name: 'Open' }).click();
+    await page.getByRole('button', { name: 'Open Vault' }).click();
     await expect(page.locator('.login-error')).toBeVisible({ timeout: LOGIN_TIMEOUT });
 
     await openDb(page);

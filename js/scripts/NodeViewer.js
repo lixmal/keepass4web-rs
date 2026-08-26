@@ -1,360 +1,326 @@
 import React from 'react'
-import Classnames from 'classnames'
-
 import withNavigateHook from './nagivateHook'
-
+import {
+    IconEye, IconEyeOff, IconCopy, IconDownload, IconCheck, IconPencil,
+} from './Icons'
 
 class NodeViewer extends React.Component {
     constructor(props) {
         super(props)
-        this.setHide = this.setHide.bind(this)
-    }
-
-    showTooltip(btn, message) {
-        $(btn).tooltip('hide')
-            .attr('data-original-title', message)
-            .tooltip('show')
-        setTimeout(function () {
-            $(btn).tooltip('destroy');
-        }, 1000);
-    }
-
-    setHide(target, hide, name, data) {
-        let entry = this.props.entry
-        if (!entry) return
-        // TODO: Handle empty passwords
-        // These are currently kept as ***** without indication to the user
-        if (typeof data === 'undefined')
-            data = null
-        if (!name || name === 'password')
-            entry.password = data
-        else if (entry.strings)
-            entry.strings[name] = data
-
-        if (hide === true)
-            target.childNodes[0].className = 'glyphicon glyphicon-eye-open'
-        else
-            target.childNodes[0].className = 'glyphicon glyphicon-eye-close'
-
-        this.forceUpdate()
-    }
-
-    PWHandler(name, event) {
-        let target = event.currentTarget
-        if (target.childNodes[0].className === 'glyphicon glyphicon-eye-close') {
-            this.setHide(target, true, name)
-            return
+        this.state = {
+            revealed: {},  // field name → revealed plaintext
+            copied:   null, // field name showing copy confirmation
         }
-
-        // else true:
-        event.persist()
-        this.serverRequest = KeePass4Web.fetch('get_protected', {
-            method: 'GET',
-            data: {
-                entry_id: this.props.entry.id,
-                name: name
-            },
-            success: function (data) {
-                this.setHide(target, false, name, data)
-
-                // hide password after X seconds
-                setTimeout(this.PWTimeout.bind(this, target, name), this.props.timeoutSec)
-            }.bind(this),
-            error: KeePass4Web.error.bind(this),
-        })
-
+        this._hideTimers = {}
+        this._copyTimer  = null
     }
 
-    copyHandler(value, event) {
-        let btn = event.currentTarget
-        if (value == null)
-            value = ''
-        navigator.clipboard.writeText(value).then(function () {
-            this.showTooltip(btn, 'Copied')
-        }.bind(this))
-            .catch(function () {
-                this.showTooltip(btn, 'Failed to copy')
-            }.bind(this))
-    }
+    // the reveal state belongs to the entry it was requested for: without this
+    // a password revealed on one entry stays on screen when the next one is
+    // opened into the same panel
+    componentDidUpdate(prevProps) {
+        const previous = prevProps.entry && prevProps.entry.id
+        const current  = this.props.entry && this.props.entry.id
+        if (previous === current) return
 
-    copyPWHandler(name, event) {
-        event.persist()
-        let target = event.currentTarget.previousSibling
-
-        this.serverRequest = KeePass4Web.fetch('get_protected', {
-            method: 'GET',
-            data: {
-                entry_id: this.props.entry.id,
-                name: name
-            },
-            success: function (data) {
-                this.copyHandler(data, event)
-            }.bind(this),
-            error: KeePass4Web.error.bind(this),
-        })
-        this.setHide(target, true, name)
-    }
-
-    downloadHandler(filename, event) {
-        // mostly taken from http://stackoverflow.com/questions/16086162/handle-file-download-from-ajax-post
-        // with adjustments
-        let xhr = new XMLHttpRequest()
-        xhr.open('GET', 'get_file', true)
-        xhr.responseType = 'arraybuffer'
-        xhr.setRequestHeader('X-CSRF-Token', KeePass4Web.getCSRFToken())
-        xhr.onload = function () {
-            if (this.status === 200) {
-                let filename = ""
-                let disposition = xhr.getResponseHeader('Content-Disposition')
-                if (disposition && disposition.indexOf('attachment') !== -1) {
-                    let filenameRegex = /filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/
-                    let matches = filenameRegex.exec(disposition)
-                    if (matches != null && matches[1]) {
-                        filename = decodeURIComponent(matches[1].replace(/['"]/g, '').replace(/^UTF-8/i, ''))
-                    }
-                }
-                let type = xhr.getResponseHeader('Content-Type')
-
-                let blob = new Blob([this.response], {type: type})
-                if (typeof window.navigator.msSaveBlob !== 'undefined') {
-                    window.navigator.msSaveBlob(blob, filename)
-                } else {
-                    let URL = window.URL || window.webkitURL
-                    let downloadUrl = URL.createObjectURL(blob)
-
-                    if (filename) {
-                        let a = document.createElement("a")
-                        if (typeof a.download === 'undefined') {
-                            window.location = downloadUrl
-                        } else {
-                            a.href = downloadUrl
-                            a.download = filename
-                            document.body.appendChild(a)
-                            a.click()
-                        }
-                    } else {
-                        window.location = downloadUrl
-                    }
-
-                    setTimeout(function () {
-                        URL.revokeObjectURL(downloadUrl)
-                    }, 100)
-                }
-            } else if (this.status >= 400) {
-                KeePass4Web.error(xhr, null, xhr.responseText)
-            }
-        }
-        xhr.setRequestHeader('Content-type', 'application/x-www-form-urlencoded; charset=UTF-8')
-        xhr.setRequestHeader('X-Requested-With', 'XMLHttpRequest')
-
-        KeePass4Web.restartTimer(true)
-
-        xhr.send('id=' + encodeURIComponent(this.props.entry.id) + '&filename=' + encodeURIComponent(filename))
-    }
-
-    PWTimeout(target, name) {
-        // ignore hidden passwords
-        if (target.textContent === true) return
-        this.setHide(target, true, name)
+        Object.values(this._hideTimers).forEach(clearTimeout)
+        this._hideTimers = {}
+        clearTimeout(this._copyTimer)
+        this.setState({ revealed: {}, copied: null })
     }
 
     componentWillUnmount() {
-        if (this.serverRequest)
-            this.serverRequest.abort()
+        if (this.serverRequest) this.serverRequest.abort()
+        Object.values(this._hideTimers).forEach(clearTimeout)
+        clearTimeout(this._copyTimer)
+    }
+
+    // ── Protected field reveal / hide ─────────────────────────────
+
+    revealField(name) {
+        this.serverRequest = KeePass4Web.fetch('get_protected', {
+            method: 'GET',
+            data: { entry_id: this.props.entry.id, name },
+            success: (data) => {
+                this.setState(prev => ({ revealed: { ...prev.revealed, [name]: data ?? '' } }))
+                clearTimeout(this._hideTimers[name])
+                this._hideTimers[name] = setTimeout(
+                    () => this.hideField(name),
+                    this.props.timeoutSec || 30000,
+                )
+            },
+            error: KeePass4Web.error.bind(this),
+        })
+    }
+
+    hideField(name) {
+        this.setState(prev => {
+            const r = { ...prev.revealed }
+            delete r[name]
+            return { revealed: r }
+        })
+    }
+
+    toggleField(name) {
+        if (Object.prototype.hasOwnProperty.call(this.state.revealed, name)) {
+            this.hideField(name)
+        } else {
+            this.revealField(name)
+        }
+    }
+
+    // ── Copy helpers ──────────────────────────────────────────────
+
+    copyValue(value, name) {
+        if (value == null) value = ''
+        navigator.clipboard.writeText(value)
+            .then(() => {
+                this.setState({ copied: name })
+                clearTimeout(this._copyTimer)
+                this._copyTimer = setTimeout(() => this.setState({ copied: null }), 1500)
+            })
+            .catch(() => {})
+    }
+
+    copyProtected(name) {
+        this.serverRequest = KeePass4Web.fetch('get_protected', {
+            method: 'GET',
+            data: { entry_id: this.props.entry.id, name },
+            success: (data) => this.copyValue(data, name),
+            error: KeePass4Web.error.bind(this),
+        })
+    }
+
+    // ── File download ─────────────────────────────────────────────
+
+    downloadFile(filename) {
+        const xhr = new XMLHttpRequest()
+        xhr.open('GET', 'get_file', true)
+        xhr.responseType = 'arraybuffer'
+        xhr.setRequestHeader('X-CSRF-Token', KeePass4Web.getCSRFToken())
+        xhr.setRequestHeader('Content-type', 'application/x-www-form-urlencoded; charset=UTF-8')
+        xhr.setRequestHeader('X-Requested-With', 'XMLHttpRequest')
+        xhr.onload = function () {
+            if (xhr.status === 200) {
+                let name = ''
+                const disp = xhr.getResponseHeader('Content-Disposition')
+                if (disp && disp.indexOf('attachment') !== -1) {
+                    const m = /filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/.exec(disp)
+                    if (m && m[1]) name = decodeURIComponent(m[1].replace(/['"]/g, '').replace(/^UTF-8/i, ''))
+                }
+                const type = xhr.getResponseHeader('Content-Type')
+                const blob = new Blob([xhr.response], { type })
+                const URL  = window.URL || window.webkitURL
+                const url  = URL.createObjectURL(blob)
+                if (name) {
+                    const a  = document.createElement('a')
+                    a.href   = url
+                    a.download = name
+                    document.body.appendChild(a)
+                    a.click()
+                    document.body.removeChild(a)
+                } else {
+                    window.location = url
+                }
+                setTimeout(() => URL.revokeObjectURL(url), 100)
+            } else if (xhr.status >= 400) {
+                KeePass4Web.error(xhr, null, xhr.responseText)
+            }
+        }
+        KeePass4Web.restartTimer(true)
+        xhr.send('id=' + encodeURIComponent(this.props.entry.id) + '&filename=' + encodeURIComponent(filename))
+    }
+
+    // ── Render helpers ────────────────────────────────────────────
+
+    renderCopyBtn(value, name) {
+        const isCopied = this.state.copied === name
+        return (
+            <button
+                className="kp-btn-icon"
+                data-testid="copy"
+                title={isCopied ? 'Copied!' : 'Copy'}
+                onClick={() => this.copyValue(value, name)}
+            >
+                {isCopied ? <IconCheck size={13}/> : <IconCopy size={13}/>}
+            </button>
+        )
+    }
+
+    renderProtectedField(label, name) {
+        const { revealed, copied } = this.state
+        const isRevealed = Object.prototype.hasOwnProperty.call(revealed, name)
+        const display    = isRevealed ? (revealed[name] || '(empty)') : '••••••••'
+
+        return (
+            <div className="kp-node-field" data-testid="entry-field" key={name}>
+                <span className="kp-node-field-label" data-testid="entry-field-label">{label}</span>
+                <span
+                    className={`kp-node-field-value${isRevealed ? '' : ' protected'}`}
+                    data-testid="entry-field-value"
+                    data-revealed={isRevealed ? 'true' : 'false'}
+                >
+                    {display}
+                </span>
+                <span className="kp-node-field-actions">
+                    <button
+                        className="kp-btn-icon"
+                        data-testid="reveal"
+                        data-revealed={isRevealed ? 'true' : 'false'}
+                        title={isRevealed ? 'Hide' : 'Show'}
+                        onClick={() => this.toggleField(name)}
+                    >
+                        {isRevealed ? <IconEyeOff size={13}/> : <IconEye size={13}/>}
+                    </button>
+                    <button
+                        className="kp-btn-icon"
+                        data-testid="copy"
+                        title={copied === name ? 'Copied!' : 'Copy'}
+                        onClick={() => this.copyProtected(name)}
+                    >
+                        {copied === name ? <IconCheck size={13}/> : <IconCopy size={13}/>}
+                    </button>
+                </span>
+            </div>
+        )
     }
 
     render() {
-        let classes = Classnames({
-            'panel': true,
-            'panel-default': true,
-            'loading-mask': this.props.mask,
-        })
+        const { entry, mask } = this.props
 
-        if (!this.props.entry) return (<div className={classes}></div>)
-
-        let entry = this.props.entry
-
-        let fields = []
-        let strings = entry.strings
-        if (strings) {
-            fields.push(
-                <tr key="fields-header">
-                    <th className="kp-fields" colSpan="3">Fields</th>
-                </tr>
-            )
-        }
-        for (let string in strings) {
-            if (strings.hasOwnProperty(string)) {
-                fields.push(
-                    <tr key={string}>
-                        <td className="kp-wrap">{string}</td>
-                        <td className="kp-wrap">
-                            {
-                                entry.protected && entry.protected.hasOwnProperty(string) ?
-                                    (strings[string] == null ? '******' : strings[string])
-                                    : strings[string]
-                            }
-                        </td>
-                        {entry.protected && entry.protected.hasOwnProperty(string) ?
-                            <td>
-                                <div className="btn-group" role="group">
-                                    <button
-                                        onClick={this.PWHandler.bind(this, string)}
-                                        type="button"
-                                        className="btn btn-default btn-sm"
-                                    >
-                                        <span className="glyphicon glyphicon-eye-open"></span>
-                                    </button>
-                                    <button
-                                        onClick={this.copyPWHandler.bind(this, string)}
-                                        type="button"
-                                        className="btn btn-default btn-sm"
-                                    >
-                                        <span className="glyphicon glyphicon-copy"></span>
-                                    </button>
-                                </div>
-                            </td>
-                            : <td></td>}
-                    </tr>
-                )
-            }
-        }
-
-        let files = []
-        let binary = entry.binary
-        if (binary) {
-            files.push(
-                <tr key="files-header">
-                    <th className="kp-files" colSpan="3">Files</th>
-                </tr>
-            )
-        }
-        for (let file in binary) {
-            if (binary.hasOwnProperty(file)) {
-                files.push(
-                    <tr key={file}>
-                        <td colSpan="2" className="kp-wrap">
-                            {file}
-                        </td>
-                        <td>
-                            <button
-                                onClick={this.downloadHandler.bind(this, file)}
-                                type="button"
-                                className="btn btn-default btn-sm"
-                            >
-                                <span className="glyphicon glyphicon-download-alt"></span>
-                            </button>
-                        </td>
-                    </tr>
-                )
-            }
-        }
-
+        if (!entry) return <div className={`kp-detail-content${mask ? ' kp-loading' : ''}`}/>
 
         let icon = null
-        if (entry.custom_icon_uuid)
-            icon = <img className="kp-icon" src={'api/v1/icon/' + encodeURIComponent(entry.custom_icon_uuid)}/>
-        else if (entry.icon)
-            icon = <img className="kp-icon" src={'assets/img/icons/' + encodeURIComponent(entry.icon) + '.png'}/>
+        if (entry.custom_icon_uuid) {
+            icon = <img className="kp-icon" style={{ width: 36, height: 36, objectFit: 'contain', borderRadius: 8 }}
+                        src={'api/v1/icon/' + encodeURIComponent(entry.custom_icon_uuid)} alt=""/>
+        } else if (entry.icon) {
+            icon = <img className="kp-icon" style={{ width: 36, height: 36, objectFit: 'contain', borderRadius: 8 }}
+                        src={'assets/img/icons/' + encodeURIComponent(entry.icon) + '.png'} alt=""/>
+        }
 
-        let tags = []
-        for (let tag in entry.tags) {
-            tags.push(
-                <span key={tag} className="kp-wrap badge badge-pill badge-light">{entry.tags[tag]}</span>
+        const tags = (entry.tags || []).map(t => (
+            <span key={t} className="kp-badge">{t}</span>
+        ))
+
+        const extraFields = []
+        const strings = entry.strings || {}
+        for (const name of Object.keys(strings)) {
+            if (entry.protected && Object.prototype.hasOwnProperty.call(entry.protected, name)) {
+                extraFields.push(this.renderProtectedField(name, name))
+            } else {
+                extraFields.push(
+                    <div className="kp-node-field" data-testid="entry-field" key={name}>
+                        <span className="kp-node-field-label" data-testid="entry-field-label">{name}</span>
+                        <span className="kp-node-field-value" data-testid="entry-field-value">{strings[name]}</span>
+                        <span className="kp-node-field-actions">
+                            {this.renderCopyBtn(strings[name], name)}
+                        </span>
+                    </div>
+                )
+            }
+        }
+
+        const files = []
+        for (const fname of Object.keys(entry.binary || {})) {
+            files.push(
+                <div className="kp-node-field" data-testid="entry-field" key={fname}>
+                    <span className="kp-node-field-label" data-testid="entry-field-label">File</span>
+                    <span className="kp-node-field-value" data-testid="entry-field-value">{fname}</span>
+                    <span className="kp-node-field-actions">
+                        <button
+                            className="kp-btn-icon"
+                            title="Download"
+                            onClick={() => this.downloadFile(fname)}
+                        >
+                            <IconDownload size={13}/>
+                        </button>
+                    </span>
+                </div>
             )
         }
 
         return (
-            <div className={classes}>
-                <div className="panel-heading">
-                    {icon}
-                    {entry.title}
+            <div className={`kp-detail-content${mask ? ' kp-loading' : ''}`}>
+                <div className="kp-detail-header">
+                    <h3>Entry Details</h3>
+                    {this.props.onEdit && (
+                        <button className="kp-btn kp-btn-ghost kp-btn-sm" onClick={this.props.onEdit}>
+                            <IconPencil size={13}/> Edit
+                        </button>
+                    )}
                 </div>
-                <div className="panel-body">
-                    <table className="table table-hover table-condensed kp-table">
-                        <colgroup>
-                            <col className="kp-entry-label"/>
-                            <col className="kp-entry-value"/>
-                            <col className="kp-entry-buttons"/>
-                        </colgroup>
-                        <tbody>
-                        <tr>
-                            <td className="kp-wrap">
-                                Username
-                            </td>
-                            <td className="kp-wrap">
-                                {entry.username}
-                            </td>
-                            <td>
-                                <button
-                                    onClick={this.copyHandler.bind(this, entry.username)}
-                                    type="button"
-                                    className="btn btn-default btn-sm"
-                                >
-                                    <span className="glyphicon glyphicon-copy"></span>
-                                </button>
-                            </td>
-                        </tr>
-                        <tr>
-                            <td className="kp-wrap">
-                                Password
-                            </td>
-                            <td className="kp-wrap">
-                                {entry.password == null ? '******' : entry.password}
-                            </td>
-                            <td>
-                                <div className="btn-group" role="group">
-                                    <button
-                                        onClick={this.PWHandler.bind(this, 'password')}
-                                        type="button"
-                                        className="btn btn-default btn-sm"
-                                    >
-                                        <span className="glyphicon glyphicon-eye-open"></span>
-                                    </button>
-                                    <button
-                                        onClick={this.copyPWHandler.bind(this, 'password')}
-                                        type="button"
-                                        className="btn btn-default btn-sm"
-                                    >
-                                        <span className="glyphicon glyphicon-copy"></span>
-                                    </button>
-                                </div>
-                            </td>
-                        </tr>
-                        <tr>
-                            <td>
-                                URL
-                            </td>
-                            <td className="kp-wrap">
+
+                <div className="kp-detail-entry-meta">
+                    <div className="kp-detail-icon">
+                        {icon || <span style={{ fontSize: 28 }}>🔑</span>}
+                    </div>
+                    <div className="kp-detail-icon-info">
+                        <h4 data-testid="entry-title">{entry.title}</h4>
+                        {entry.url && (
+                            <p>
                                 <a href={entry.url} target="_blank" rel="noopener noreferrer">{entry.url}</a>
-                            </td>
-                            <td>
-                            </td>
-                        </tr>
-                        <tr>
-                            <td className="kp-wrap">
-                                Notes
-                            </td>
-                            <td className="kp-wrap-comment">
+                            </p>
+                        )}
+                    </div>
+                </div>
+
+                <div className="kp-node-fields">
+                    <div className="kp-node-field" data-testid="entry-field">
+                        <span className="kp-node-field-label" data-testid="entry-field-label">Username</span>
+                        <span className="kp-node-field-value" data-testid="entry-field-value">{entry.username || '—'}</span>
+                        <span className="kp-node-field-actions">
+                            {this.renderCopyBtn(entry.username, 'username')}
+                        </span>
+                    </div>
+
+                    {this.renderProtectedField('Password', 'password')}
+
+                    {entry.url && (
+                        <div className="kp-node-field" data-testid="entry-field">
+                            <span className="kp-node-field-label" data-testid="entry-field-label">URL</span>
+                            <span className="kp-node-field-value" data-testid="entry-field-value">
+                                <a href={entry.url} target="_blank" rel="noopener noreferrer">{entry.url}</a>
+                            </span>
+                            <span className="kp-node-field-actions">
+                                {this.renderCopyBtn(entry.url, 'url')}
+                            </span>
+                        </div>
+                    )}
+
+                    {entry.notes && (
+                        <div className="kp-node-field" data-testid="entry-field" style={{ alignItems: 'flex-start' }}>
+                            <span className="kp-node-field-label" data-testid="entry-field-label">Notes</span>
+                            <span className="kp-node-field-value" data-testid="entry-field-value" style={{ whiteSpace: 'pre-wrap' }}>
                                 {entry.notes}
-                            </td>
-                            <td>
-                            </td>
-                        </tr>
-                        <tr>
-                            <td className="kp-wrap">
-                                Tags
-                            </td>
-                            <td className="kp-wrap">
+                            </span>
+                            <span className="kp-node-field-actions"/>
+                        </div>
+                    )}
+
+                    {tags.length > 0 && (
+                        <div className="kp-node-field" data-testid="entry-field">
+                            <span className="kp-node-field-label" data-testid="entry-field-label">Tags</span>
+                            <span className="kp-node-field-value" data-testid="entry-field-value" style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
                                 {tags}
-                            </td>
-                            <td>
-                            </td>
-                        </tr>
-                        {fields}
-                        {files}
-                        </tbody>
-                    </table>
+                            </span>
+                            <span className="kp-node-field-actions"/>
+                        </div>
+                    )}
+
+                    {extraFields.length > 0 && (
+                        <>
+                            <div className="kp-node-section-label">Custom Fields</div>
+                            {extraFields}
+                        </>
+                    )}
+
+                    {files.length > 0 && (
+                        <>
+                            <div className="kp-node-section-label">Attachments</div>
+                            {files}
+                        </>
+                    )}
                 </div>
             </div>
         )

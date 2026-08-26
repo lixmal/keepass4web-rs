@@ -3,10 +3,9 @@ const {
   DB,
   copyButton,
   expectClipboard,
+  expectRevealed,
   fieldRow,
   fieldValue,
-  ICON_HIDDEN,
-  ICON_SHOWN,
   openDb,
   openEntry,
   revealButton,
@@ -24,7 +23,7 @@ test.describe('Viewing an entry', () => {
     await expect(fieldValue(page, 'Username')).toHaveText(DB.entry.username);
     await expect(fieldValue(page, 'Notes')).toHaveText(DB.entry.notes);
     await expect(fieldRow(page, 'URL').getByRole('link')).toHaveAttribute('href', DB.entry.url);
-    await expect(fieldRow(page, 'Tags').locator('.badge')).toHaveText(DB.entry.tag);
+    await expect(fieldRow(page, 'Tags').locator('.kp-badge')).toHaveText(DB.entry.tag);
   });
 
   test('keeps the password and the custom field masked until asked', async ({ page }) => {
@@ -36,12 +35,12 @@ test.describe('Viewing an entry', () => {
     await revealButton(page, 'Password').click();
 
     await expect(fieldValue(page, 'Password')).toHaveText(DB.entry.password);
-    await expect(revealButton(page, 'Password').locator('span')).toHaveClass(ICON_SHOWN);
+    await expectRevealed(page, 'Password', true);
 
     await revealButton(page, 'Password').click();
 
     await expect(fieldValue(page, 'Password')).toHaveText(DB.masked);
-    await expect(revealButton(page, 'Password').locator('span')).toHaveClass(ICON_HIDDEN);
+    await expectRevealed(page, 'Password', false);
   });
 
   test('reveals a protected custom field on its own', async ({ page }) => {
@@ -79,6 +78,6 @@ test.describe('Viewing an entry', () => {
     await openEntry(page, DB.entry.clone);
 
     await expect(fieldValue(page, 'Password')).toHaveText(DB.masked);
-    await expect(revealButton(page, 'Password').locator('span')).toHaveClass(ICON_HIDDEN);
+    await expectRevealed(page, 'Password', false);
   });
 });

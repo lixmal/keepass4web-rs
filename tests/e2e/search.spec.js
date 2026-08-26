@@ -1,6 +1,6 @@
 const { test, expect } = require('@playwright/test');
 const {
-  CARD_HEADER, DB, entryRow, entryRows, groupTitle, openDb, openEntry, selectGroup,
+  DB, entryRow, entryRows, entryTitle, fieldValue, groupTitle, openDb, openEntry, selectGroup,
 } = require('./helpers');
 
 async function search(page, term) {
@@ -67,7 +67,7 @@ test.describe('Searching entries', () => {
 
     await search(page, DB.entry.title);
 
-    await expect(page.locator(`#node-viewer ${CARD_HEADER}`)).toHaveCount(0);
+    await expect(entryTitle(page)).toHaveCount(0);
   });
 
   test('opens an entry from the search results', async ({ page }) => {
@@ -75,6 +75,6 @@ test.describe('Searching entries', () => {
 
     await openEntry(page, DB.entry.clone);
 
-    await expect(page.locator('#node-viewer td', { hasText: DB.entry.username })).toBeVisible();
+    await expect(fieldValue(page, 'Username')).toHaveText(DB.entry.username);
   });
 });

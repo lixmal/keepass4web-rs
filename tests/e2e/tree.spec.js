@@ -1,6 +1,6 @@
 const { test, expect } = require('@playwright/test');
 const {
-  CARD_HEADER, DB, entryRow, entryRows, groupTitle, openDb, selectGroup, treeNode,
+  DB, entryRow, entryRows, entryTitle, groupTitle, openDb, selectGroup, treeNode, treeNodes, treeRoot,
 } = require('./helpers');
 
 test.describe('Browsing groups', () => {
@@ -9,8 +9,8 @@ test.describe('Browsing groups', () => {
   });
 
   test('lists the groups of the database under the root node', async ({ page }) => {
-    await expect(page.locator('.treeview-header')).toHaveText(DB.root);
-    await expect(page.locator('.treeview-body .list-group-item')).toHaveText(DB.groups);
+    await expect(treeRoot(page)).toHaveText(DB.root);
+    await expect(treeNodes(page)).toHaveText(DB.groups);
   });
 
   test('shows the entries of a group with their usernames', async ({ page }) => {
@@ -18,8 +18,8 @@ test.describe('Browsing groups', () => {
 
     await expect(entryRows(page)).toHaveCount(2);
     const row = entryRow(page, DB.entry.title);
-    await expect(row.locator('[data-testid="entry-row-title"]')).toHaveText(DB.entry.title);
-    await expect(row.locator('[data-testid="entry-row-username"]')).toHaveText(DB.entry.username);
+    await expect(row.locator('[data-testid="entry-card-title"]')).toHaveText(DB.entry.title);
+    await expect(row.locator('[data-testid="entry-card-meta"]')).toContainText(DB.entry.username);
     await expect(entryRow(page, DB.entry.clone)).toBeVisible();
   });
 
@@ -41,11 +41,11 @@ test.describe('Browsing groups', () => {
   test('drops the open entry when the group changes', async ({ page }) => {
     await selectGroup(page, 'group1');
     await entryRow(page, DB.entry.title).click();
-    await expect(page.locator(`#node-viewer ${CARD_HEADER}`)).toHaveText(DB.entry.title);
+    await expect(entryTitle(page)).toHaveText(DB.entry.title);
 
     await selectGroup(page, 'group2');
 
-    await expect(page.locator(`#node-viewer ${CARD_HEADER}`)).toHaveCount(0);
+    await expect(entryTitle(page)).toHaveCount(0);
   });
 
   test('serves the icons the tree and the entries point at', async ({ page }) => {
@@ -63,7 +63,7 @@ test.describe('Browsing groups', () => {
   });
 
   test('selecting the root group shows it without entries', async ({ page }) => {
-    await page.locator('.treeview-header').click();
+    await treeRoot(page).click();
 
     await expect(groupTitle(page)).toHaveText(DB.root);
     await expect(entryRows(page)).toHaveCount(0);

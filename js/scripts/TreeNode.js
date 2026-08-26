@@ -1,113 +1,95 @@
 import React from 'react'
 import withNavigateHook from './nagivateHook'
-
+import { IconFolder, IconChevDown, IconChevRight } from './Icons'
 
 class TreeNode extends React.Component {
     constructor(props) {
         super(props)
-
-        let node = props.node
         this.state = {
-            expanded: node.hasOwnProperty('expanded') ?
-                node.expanded :
-                props.level < (props.options.levels || 3) ? true : false
+            expanded: props.node.expanded !== undefined
+                ? props.node.expanded
+                : props.level < (props.options.levels || 3),
         }
     }
 
-    toggleExpanded(event) {
-        this.setState({expanded: !this.state.expanded})
-        event.stopPropagation()
+    toggle(e) {
+        this.setState(p => ({ expanded: !p.expanded }))
+        e.stopPropagation()
     }
 
-    select(node, event) {
-        let nodeClick = this.props.options.nodeClick
-        if (nodeClick)
-            nodeClick(node)
-        event.stopPropagation()
+    select(node, e) {
+        e.stopPropagation()
+        const { nodeClick } = this.props.options
+        if (nodeClick) nodeClick(node)
     }
 
     render() {
-        let node = this.props.node
-        let options = this.props.options
-        let showBorder = typeof options.showBorder === 'undefined' ? true : options.showBorder
+        const { node, level, visible, options } = this.props
+        const { expanded } = this.state
 
-        let style
-        if (!this.props.visible) {
-            style = {
-                display: 'none'
-            }
+        if (!visible) return null
+
+        const hasChildren = node.children && node.children.length > 0
+
+        let expandIcon = null
+        if (hasChildren) {
+            expandIcon = (
+                <span
+                    className="kp-tree-expand"
+                    onClick={this.toggle.bind(this)}
+                    style={{ display: 'flex', cursor: 'pointer', flexShrink: 0 }}
+                >
+                    {expanded ? <IconChevDown size={12}/> : <IconChevRight size={12}/>}
+                </span>
+            )
         } else {
-            if (!showBorder) {
-                style.border = 'none'
-            } else if (options.borderColor) {
-                style.border = '1px solid ' + options.borderColor
-            }
+            expandIcon = <span style={{ width: 12, flexShrink: 0 }}/>
         }
 
-        let indents = []
-        for (let i = 0; i < this.props.level - 1; i++) {
-            indents.push(<span className="indent" key={i}></span>)
-        }
-
-        let expandCollapseIcon
-        if (node.children) {
-            if (!this.state.expanded) {
-                expandCollapseIcon = (
-                    <span className={options.expandIcon || 'glyphicon glyphicon-plus'}
-                          onClick={this.toggleExpanded.bind(this)}>
-                    </span>
-                )
-            } else {
-                expandCollapseIcon = (
-                    <span className={options.collapseIcon || 'glyphicon glyphicon-minus'}
-                          onClick={this.toggleExpanded.bind(this)}>
-                    </span>
-                )
-            }
+        let nodeIcon = null
+        if (node.custom_icon_uuid) {
+            nodeIcon = (
+                <img
+                    className="kp-icon"
+                    style={{ width: 15, height: 15, objectFit: 'contain', flexShrink: 0 }}
+                    src={'api/v1/icon/' + encodeURIComponent(node.custom_icon_uuid)}
+                    alt=""
+                />
+            )
         } else {
-            expandCollapseIcon = (
-                <span className={options.emptyIcon || 'glyphicon glyphicon-none'}></span>
+            nodeIcon = (
+                <span className="kp-tree-icon" style={{ display: 'flex' }}>
+                    <IconFolder size={15}/>
+                </span>
             )
         }
 
-        let srcurl
-        if (node.custom_icon_uuid) {
-            srcurl = 'api/v1/icon/' + encodeURIComponent(node.custom_icon_uuid)
-        } else {
-            srcurl = 'assets/img/icons/' + encodeURIComponent(node.icon || options.nodeIcon || '48') + '.png'
-        }
-        let nodeIcon = (
-            <img src={srcurl} className="kp-icon icon"/>
-        )
-
-        let children = []
-        if (node.children) {
-            let nodes = node.children
-            for (let i in nodes) {
-                children.push(
-                    <TreeNode
-                        node={nodes[i]}
-                        level={this.props.level + 1}
-                        visible={this.state.expanded && this.props.visible}
-                        options={options}
-                        key={nodes[i].id}
-                    />
-                )
-            }
-        }
+        const children = hasChildren ? node.children.map(child => (
+            <TreeNode
+                node={child}
+                level={level + 1}
+                visible={expanded}
+                options={options}
+                key={child.id}
+            />
+        )) : null
 
         return (
             <div>
-                <li className="list-group-item"
-                    style={style}
+                <div
+                    className="kp-tree-item"
+                    data-testid="tree-node"
                     onClick={this.select.bind(this, node)}
                 >
-                    {indents}
-                    {expandCollapseIcon}
+                    {expandIcon}
                     {nodeIcon}
                     {node.title}
-                </li>
-                {children}
+                </div>
+                {children && (
+                    <div className="kp-tree-children">
+                        {children}
+                    </div>
+                )}
             </div>
         )
     }

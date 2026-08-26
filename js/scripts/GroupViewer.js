@@ -1,138 +1,70 @@
 import React from 'react'
-import Classnames from 'classnames'
-
 import withNavigateHook from './nagivateHook'
+import {
+    IconPlus, IconPencil, IconTrash, IconLock, IconCheck, IconX, IconFolder, IconMonitor, IconDatabase,
+} from './Icons'
 
 const NIL_UUID = '00000000-0000-0000-0000-000000000000'
 
-function generatePassword(length = 20) {
-    const charset = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*()-_=+[]{}|;:,.<>?'
-    const arr = new Uint8Array(length)
-    window.crypto.getRandomValues(arr)
-    return Array.from(arr).map(b => charset[b % charset.length]).join('')
+function entryIcon(entry) {
+    if (entry.custom_icon_uuid)
+        return <img className="kp-icon" style={{ width: 18, height: 18, objectFit: 'contain' }}
+                    src={'api/v1/icon/' + encodeURIComponent(entry.custom_icon_uuid)} alt=""/>
+    if (entry.url && entry.url.includes('db'))
+        return <IconDatabase size={18}/>
+    return <IconMonitor size={18}/>
 }
-
-const EMPTY_FORM = { title: '', username: '', password: '', url: '', notes: '' }
 
 class GroupViewer extends React.Component {
     constructor(props) {
         super(props)
         this.state = {
-            // new entry form
-            showForm: false,
-            form: { ...EMPTY_FORM },
-            saving: false,
-            showPassword: false,
-            // edit entry
-            editEntry: null,
-            editForm: { ...EMPTY_FORM },
-            editSaving: false,
-            editShowPassword: false,
-            // rename group
-            editingTitle: false,
-            titleDraft: '',
-            titleSaving: false,
-            // new group
+            // group rename
+            editingTitle:  false,
+            titleDraft:    '',
+            titleSaving:   false,
+            // add subgroup
             showGroupForm: false,
-            newGroupName: '',
-            groupSaving: false,
+            newGroupName:  '',
+            groupSaving:   false,
         }
     }
 
-    getIcon(element) {
-        if (element.custom_icon_uuid)
-            return <img className="kp-icon" src={'api/v1/icon/' + encodeURIComponent(element.custom_icon_uuid)}/>
-        else if (element.icon)
-            return <img className="kp-icon" src={'assets/img/icons/' + encodeURIComponent(element.icon) + '.png'}/>
+    // ── Group rename ─────────────────────────────────────────────
+
+    startRename() {
+        this.setState({ editingTitle: true, titleDraft: this.props.group.title })
     }
 
-    // ── new entry ────────────────────────────────────────────────────────────
-
-    onNewEntry() {
-        this.setState({ showForm: true, showPassword: false, form: { ...EMPTY_FORM }, editEntry: null })
-    }
-
-    onCancel() {
-        this.setState({ showForm: false })
-    }
-
-    onFormChange(field, e) {
-        this.setState(prev => ({ form: { ...prev.form, [field]: e.target.value } }))
-    }
-
-    onGeneratePassword() {
-        this.setState(prev => ({ form: { ...prev.form, password: generatePassword() }, showPassword: true }))
-    }
-
-    onSubmit(e) {
+    saveRename(e) {
         e.preventDefault()
-        if (!this.props.group) return
-        this.setState({ saving: true })
-        KeePass4Web.fetch('entry', {
-            method: 'POST',
-            data: { group_id: this.props.group.id, ...this.state.form },
-            success: (data) => {
-                this.setState({ showForm: false, saving: false })
-                if (this.props.onEntryCreated) this.props.onEntryCreated(data && data.id)
-            },
-            error: (err) => {
-                this.setState({ saving: false })
-                KeePass4Web.error.call(this, err)
-            },
-        })
-    }
-
-    // ── edit entry ───────────────────────────────────────────────────────────
-
-    onEditEntry(entry, ev) {
-        ev.stopPropagation()
-        this.setState({
-            editEntry: entry,
-            editForm: { title: entry.title || '', username: entry.username || '', password: '', url: entry.url || '', notes: '' },
-            editShowPassword: false,
-            showForm: false,
-        })
-    }
-
-    onEditFormChange(field, e) {
-        this.setState(prev => ({ editForm: { ...prev.editForm, [field]: e.target.value } }))
-    }
-
-    onEditGeneratePassword() {
-        this.setState(prev => ({ editForm: { ...prev.editForm, password: generatePassword() }, editShowPassword: true }))
-    }
-
-    onEditSubmit(e) {
-        e.preventDefault()
-        const { editEntry, editForm } = this.state
-        this.setState({ editSaving: true })
-        KeePass4Web.fetch('entry', {
+        const name = this.state.titleDraft.trim()
+        if (!name) return
+        this.setState({ titleSaving: true })
+        KeePass4Web.fetch('group', {
             method: 'PUT',
-            data: { id: editEntry.id, ...editForm },
+            data: { id: this.props.group.id, title: name },
             success: () => {
-                this.setState({ editEntry: null, editSaving: false })
-                if (this.props.onEntryCreated) this.props.onEntryCreated()
+                this.setState({ editingTitle: false, titleSaving: false })
+                if (this.props.onGroupRenamed) this.props.onGroupRenamed(this.props.group.id, name)
             },
             error: (err) => {
-                this.setState({ editSaving: false })
+                this.setState({ titleSaving: false })
                 KeePass4Web.error.call(this, err)
             },
         })
     }
 
-    // ── create group ─────────────────────────────────────────────────────────
+    // ── Create subgroup ──────────────────────────────────────────
 
-    onNewGroup() {
-        this.setState({ showGroupForm: true, newGroupName: '', showForm: false, editEntry: null })
-    }
-
-    onGroupFormSubmit(e) {
+    saveGroup(e) {
         e.preventDefault()
-        if (!this.props.group || !this.state.newGroupName.trim()) return
+        const name = this.state.newGroupName.trim()
+        if (!name) return
         this.setState({ groupSaving: true })
         KeePass4Web.fetch('group', {
             method: 'POST',
-            data: { parent_id: this.props.group.id, title: this.state.newGroupName.trim() },
+            data: { parent_id: this.props.group.id, title: name },
             success: () => {
                 this.setState({ showGroupForm: false, newGroupName: '', groupSaving: false })
                 if (this.props.onGroupCreated) this.props.onGroupCreated()
@@ -144,263 +76,175 @@ class GroupViewer extends React.Component {
         })
     }
 
-    // ── rename group ─────────────────────────────────────────────────────────
+    // ── Delete entry ─────────────────────────────────────────────
 
-    onRenameStart() {
-        this.setState({ editingTitle: true, titleDraft: this.props.group.title })
-    }
-
-    onRenameSave(e) {
-        e.preventDefault()
-        const { titleDraft } = this.state
-        if (!titleDraft.trim()) return
-        this.setState({ titleSaving: true })
-        KeePass4Web.fetch('group', {
-            method: 'PUT',
-            data: { id: this.props.group.id, title: titleDraft.trim() },
-            success: () => {
-                this.setState({ editingTitle: false, titleSaving: false })
-                if (this.props.onGroupRenamed) this.props.onGroupRenamed(this.props.group.id, titleDraft.trim())
-            },
-            error: (err) => {
-                this.setState({ titleSaving: false })
-                KeePass4Web.error.call(this, err)
-            },
+    deleteEntry(entry, e) {
+        e.stopPropagation()
+        if (!window.confirm(`Delete "${entry.title}"?`)) return
+        KeePass4Web.fetch('entry', {
+            method: 'DELETE',
+            data: { id: entry.id },
+            success: () => { if (this.props.onEntryDeleted) this.props.onEntryDeleted() },
+            error: KeePass4Web.error.bind(this),
         })
     }
 
-    // ── render helpers ───────────────────────────────────────────────────────
-
-    renderPasswordInput(value, showField, onChangeFn, onToggleFn, onGenFn) {
-        const eyeIcon = showField ? 'glyphicon-eye-close' : 'glyphicon-eye-open'
-        return (
-            <div className="input-group">
-                <input
-                    className="form-control"
-                    type={showField ? 'text' : 'password'}
-                    placeholder="Password (leave blank to keep existing)"
-                    value={value}
-                    onChange={onChangeFn}
-                />
-                <div className="input-group-btn">
-                    <button type="button" className="btn btn-default btn-sm" title="Show / hide" onClick={onToggleFn}>
-                        <span className={'glyphicon ' + eyeIcon}></span>
-                    </button>
-                    <button type="button" className="btn btn-default btn-sm" title="Generate random password" onClick={onGenFn}>
-                        <span className="glyphicon glyphicon-refresh"></span>
-                    </button>
-                </div>
-            </div>
-        )
-    }
-
-    renderEntryForm(form, showPw, onChangeFn, onTogglePw, onGenPw, onSubmitFn, onCancelFn, saving) {
-        return (
-            <tr key="entry-form">
-                <td colSpan="3">
-                    <form onSubmit={onSubmitFn}>
-                        <div className="form-group form-group-sm">
-                            <input className="form-control" placeholder="Title" required autoFocus
-                                value={form.title} onChange={onChangeFn.bind(this, 'title')} />
-                        </div>
-                        <div className="form-group form-group-sm">
-                            <input className="form-control" placeholder="Username"
-                                value={form.username} onChange={onChangeFn.bind(this, 'username')} />
-                        </div>
-                        <div className="form-group form-group-sm">
-                            {this.renderPasswordInput(
-                                form.password, showPw,
-                                onChangeFn.bind(this, 'password'),
-                                onTogglePw, onGenPw
-                            )}
-                        </div>
-                        <div className="form-group form-group-sm">
-                            <input className="form-control" placeholder="URL"
-                                value={form.url} onChange={onChangeFn.bind(this, 'url')} />
-                        </div>
-                        <div className="form-group form-group-sm">
-                            <input className="form-control" placeholder="Notes"
-                                value={form.notes} onChange={onChangeFn.bind(this, 'notes')} />
-                        </div>
-                        <div className="btn-group">
-                            <button type="submit" className="btn btn-primary btn-sm" disabled={saving}>
-                                {saving ? 'Saving…' : 'Save'}
-                            </button>
-                            <button type="button" className="btn btn-default btn-sm" onClick={onCancelFn}>
-                                Cancel
-                            </button>
-                        </div>
-                    </form>
-                </td>
-            </tr>
-        )
-    }
-
     render() {
-        const classes = Classnames({ 'panel': true, 'panel-default': true, 'loading-mask': this.props.mask })
+        const { group, groupDepth, selectedEntryId, onSelect, onNewEntry, onEditEntry, mask } = this.props
+        const { editingTitle, titleDraft, titleSaving, showGroupForm, newGroupName, groupSaving } = this.state
 
-        if (!this.props.group) return (<div className={classes}></div>)
+        const panelClass = `kp-center${mask ? ' kp-loading' : ''}`
+        if (!group) return <div className="kp-center"/>
 
-        const group = this.props.group
-        const isSearchResult = group.id === NIL_UUID
-        const canAddGroup = !isSearchResult && (this.props.groupDepth === undefined || this.props.groupDepth < 2)
-        const { editEntry, editingTitle, titleDraft, titleSaving, showGroupForm, newGroupName, groupSaving } = this.state
+        const isSearch    = group.id === NIL_UUID
+        const canAddGroup = !isSearch && (groupDepth === undefined || groupDepth < 2)
 
-        // ── group heading ────────────────────────────────────────────────────
-        let heading
+        // ── heading ──────────────────────────────────────────────
+        let titleEl
         if (editingTitle) {
-            heading = (
-                <form className="form-inline" onSubmit={this.onRenameSave.bind(this)}
-                      style={{ display: 'inline' }}>
-                    <div className="input-group input-group-sm" style={{ maxWidth: 260 }}>
-                        <input
-                            className="form-control"
-                            value={titleDraft}
-                            autoFocus
-                            onChange={e => this.setState({ titleDraft: e.target.value })}
-                        />
-                        <div className="input-group-btn">
-                            <button type="submit" className="btn btn-primary btn-sm" disabled={titleSaving}>
-                                {titleSaving ? '…' : <span className="glyphicon glyphicon-ok"></span>}
-                            </button>
-                            <button type="button" className="btn btn-default btn-sm"
-                                onClick={() => this.setState({ editingTitle: false })}>
-                                <span className="glyphicon glyphicon-remove"></span>
-                            </button>
-                        </div>
-                    </div>
+            titleEl = (
+                <form className="kp-center-title-form" onSubmit={this.saveRename.bind(this)}>
+                    <input
+                        className="kp-input"
+                        value={titleDraft}
+                        autoFocus
+                        style={{ maxWidth: 200, padding: '4px 8px', fontSize: 15, fontWeight: 600 }}
+                        onChange={e => this.setState({ titleDraft: e.target.value })}
+                    />
+                    <button type="submit" className="kp-btn-icon" title="Save" disabled={titleSaving}>
+                        <IconCheck size={14}/>
+                    </button>
+                    <button type="button" className="kp-btn-icon" title="Cancel"
+                            onClick={() => this.setState({ editingTitle: false })}>
+                        <IconX size={14}/>
+                    </button>
                 </form>
             )
         } else {
-            heading = (
-                <span>
-                    {this.getIcon(group)}
-                    {group.title}
-                    {!isSearchResult && (
-                        <button className="btn btn-link btn-xs" style={{ padding: '0 4px' }}
-                            title="Rename group" onClick={this.onRenameStart.bind(this)}>
-                            <span className="glyphicon glyphicon-pencil"></span>
-                        </button>
-                    )}
-                </span>
+            titleEl = (
+                <div className="kp-center-title">
+                    <h2 data-testid="group-title">
+                        {group.title}
+                        {!isSearch && (
+                            <button
+                                className="kp-btn-link"
+                                title="Rename group"
+                                onClick={this.startRename.bind(this)}
+                                style={{ marginLeft: 6 }}
+                            >
+                                <IconPencil size={13}/>
+                            </button>
+                        )}
+                    </h2>
+                    <small>
+                        {(group.entries || []).length} saved entr{(group.entries || []).length !== 1 ? 'ies' : 'y'}
+                    </small>
+                </div>
             )
         }
 
-        // ── entry rows ───────────────────────────────────────────────────────
-        let entries = []
-        for (var i in group.entries) {
-            let entry = group.entries[i]
-            const isEditing = editEntry && editEntry.id === entry.id
-
-            entries.push(
-                <tr key={entry.id} onClick={this.props.onSelect.bind(this, entry)}
-                    className={isEditing ? 'active' : ''}>
-                    <td className="kp-wrap" data-testid="entry-row-title">
-                        {this.getIcon(entry)}
-                        {entry.title}
-                    </td>
-                    <td className="kp-wrap" data-testid="entry-row-username">{entry.username}</td>
-                    <td style={{ whiteSpace: 'nowrap' }}>
-                        <button className="btn btn-default btn-xs" title="Edit entry"
-                            onClick={this.onEditEntry.bind(this, entry)}>
-                            <span className="glyphicon glyphicon-pencil"></span>
-                        </button>
-                        {' '}
-                        <button className="btn btn-danger btn-xs" title="Delete entry"
-                            onClick={(ev) => { ev.stopPropagation(); this.props.onDeleteEntry && this.props.onDeleteEntry(entry) }}>
-                            <span className="glyphicon glyphicon-trash"></span>
-                        </button>
-                    </td>
-                </tr>
-            )
-
-            if (isEditing) {
-                entries.push(this.renderEntryForm(
-                    this.state.editForm,
-                    this.state.editShowPassword,
-                    this.onEditFormChange.bind(this),
-                    () => this.setState(p => ({ editShowPassword: !p.editShowPassword })),
-                    this.onEditGeneratePassword.bind(this),
-                    this.onEditSubmit.bind(this),
-                    () => this.setState({ editEntry: null }),
-                    this.state.editSaving,
-                ))
-            }
-        }
-
-        // ── new entry form ───────────────────────────────────────────────────
-        let newEntryForm = null
-        if (this.state.showForm) {
-            newEntryForm = this.renderEntryForm(
-                this.state.form,
-                this.state.showPassword,
-                this.onFormChange.bind(this),
-                () => this.setState(p => ({ showPassword: !p.showPassword })),
-                this.onGeneratePassword.bind(this),
-                this.onSubmit.bind(this),
-                this.onCancel.bind(this),
-                this.state.saving,
-            )
-        }
+        // ── entry cards ──────────────────────────────────────────
+        const cards = (group.entries || []).map(entry => (
+            <div
+                key={entry.id}
+                className={`kp-card${selectedEntryId === entry.id ? ' active' : ''}`}
+                data-testid="entry-card"
+                onClick={() => onSelect && onSelect(entry)}
+            >
+                <div className="kp-card-icon">
+                    {entryIcon(entry)}
+                </div>
+                <div className="kp-card-body">
+                    <div className="kp-card-title" data-testid="entry-card-title">{entry.title}</div>
+                    <div className="kp-card-meta" data-testid="entry-card-meta">
+                        {[entry.username, entry.url].filter(Boolean).join(' · ')}
+                    </div>
+                </div>
+                <div className="kp-card-actions">
+                    <button
+                        className="kp-btn-icon"
+                        title="Edit entry"
+                        onClick={ev => { ev.stopPropagation(); onEditEntry && onEditEntry(entry) }}
+                    >
+                        <IconPencil size={13}/>
+                    </button>
+                    <button
+                        className="kp-btn-icon"
+                        title="Delete entry"
+                        style={{ color: 'var(--kp-text-muted)' }}
+                        onClick={this.deleteEntry.bind(this, entry)}
+                    >
+                        <IconTrash size={13}/>
+                    </button>
+                </div>
+            </div>
+        ))
 
         return (
-            <div className={classes}>
-                <div className="panel-heading" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <span data-testid="group-title">{heading}</span>
-                    {!isSearchResult && !editingTitle && (
-                        <span>
+            <div className={panelClass}>
+                <div className="kp-center-header">
+                    {titleEl}
+
+                    {!editingTitle && (
+                        <div className="kp-center-actions">
+                            {group.entries && group.entries.length > 0 && (
+                                <span className="kp-badge kp-badge-protected">
+                                    <IconLock size={11}/>
+                                    protected
+                                </span>
+                            )}
                             {canAddGroup && (
-                                <button className="btn btn-info btn-xs" style={{ marginRight: 4 }}
-                                    onClick={this.onNewGroup.bind(this)} title="Add subgroup">
-                                    <span className="glyphicon glyphicon-folder-open"></span> Add Group
+                                <button
+                                    className="kp-btn kp-btn-ghost kp-btn-sm"
+                                    onClick={() => this.setState({ showGroupForm: true, newGroupName: '' })}
+                                    title="Add subgroup"
+                                >
+                                    <IconFolder size={13}/>
+                                    Add Group
                                 </button>
                             )}
-                            <button className="btn btn-success btn-xs"
-                                onClick={this.onNewEntry.bind(this)} title="New entry">
-                                <span className="glyphicon glyphicon-plus"></span> New Entry
-                            </button>
-                        </span>
+                            {!isSearch && (
+                                <button
+                                    className="kp-btn kp-btn-primary kp-btn-sm"
+                                    onClick={() => onNewEntry && onNewEntry()}
+                                >
+                                    <IconPlus size={13}/>
+                                    New Entry
+                                </button>
+                            )}
+                        </div>
                     )}
                 </div>
+
+                {/* Add-group form */}
                 {showGroupForm && (
-                    <div className="panel-body" style={{ paddingTop: 8, paddingBottom: 8, borderBottom: '1px solid #ddd' }}>
-                        <form className="form-inline" onSubmit={this.onGroupFormSubmit.bind(this)}>
-                            <div className="input-group input-group-sm" style={{ maxWidth: 300 }}>
-                                <input
-                                    className="form-control"
-                                    placeholder="Group name"
-                                    required
-                                    autoFocus
-                                    value={newGroupName}
-                                    onChange={e => this.setState({ newGroupName: e.target.value })}
-                                />
-                                <div className="input-group-btn">
-                                    <button type="submit" className="btn btn-primary btn-sm" disabled={groupSaving}>
-                                        {groupSaving ? '…' : 'Create'}
-                                    </button>
-                                    <button type="button" className="btn btn-default btn-sm"
-                                        onClick={() => this.setState({ showGroupForm: false })}>
-                                        Cancel
-                                    </button>
-                                </div>
-                            </div>
+                    <div className="kp-group-form">
+                        <form onSubmit={this.saveGroup.bind(this)}>
+                            <input
+                                className="kp-input"
+                                placeholder="Group name"
+                                required autoFocus
+                                value={newGroupName}
+                                style={{ maxWidth: 260 }}
+                                onChange={e => this.setState({ newGroupName: e.target.value })}
+                            />
+                            <button type="submit" className="kp-btn kp-btn-primary kp-btn-sm" disabled={groupSaving}>
+                                {groupSaving ? '…' : 'Create'}
+                            </button>
+                            <button type="button" className="kp-btn kp-btn-outline kp-btn-sm"
+                                    onClick={() => this.setState({ showGroupForm: false })}>
+                                Cancel
+                            </button>
                         </form>
                     </div>
                 )}
-                <div className="panel-body">
-                    <table className="table table-hover table-condensed kp-table">
-                        <thead>
-                        <tr>
-                            <th>Entry Name</th>
-                            <th>Username</th>
-                            <th></th>
-                        </tr>
-                        </thead>
-                        <tbody className="groupview-body">
-                        {entries}
-                        {newEntryForm}
-                        </tbody>
-                    </table>
+
+                <div className="kp-entries">
+                    {cards.length > 0 ? cards : (
+                        <div style={{ padding: '40px 0', textAlign: 'center', color: 'var(--kp-text-muted)', fontSize: 13 }}>
+                            No entries yet. Click <strong>+ New Entry</strong> to add one.
+                        </div>
+                    )}
                 </div>
             </div>
         )

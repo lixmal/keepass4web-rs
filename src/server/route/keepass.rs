@@ -21,6 +21,7 @@ struct NewEntry {
     password: String,
     url: String,
     notes: String,
+    icon: Option<usize>,
 }
 
 #[derive(Deserialize)]
@@ -31,6 +32,7 @@ struct UpdateEntry {
     password: String,
     url: String,
     notes: String,
+    icon: Option<usize>,
 }
 
 #[derive(Deserialize)]
@@ -264,6 +266,7 @@ async fn create_entry(session: Session, config: Data<Config>, db_cache: Data<DbC
             &params.password,
             &params.url,
             &params.notes,
+            params.icon,
         )?;
         Ok(())
     }).await {
@@ -286,6 +289,7 @@ async fn update_entry(session: Session, config: Data<Config>, db_cache: Data<DbC
             &params.password,
             &params.url,
             &params.notes,
+            params.icon,
         )
     }).await {
         return err;
