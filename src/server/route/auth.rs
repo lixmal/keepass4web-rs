@@ -14,7 +14,7 @@ use crate::keepass::db_cache::DbCache;
 use crate::keepass::keepass::KeePass;
 use crate::rate_limit::RateLimiter;
 use crate::server::route::INDEX_FILE;
-use crate::server::route::util::{_close_db, check_user_session, db_is_open, revoke_key, set_user_session, store_key};
+use crate::server::route::util::{_close_db, check_user_session, db_is_open, get_db, revoke_key, set_user_session, store_key};
 use crate::session::AuthSession;
 
 #[derive(Serialize)]
@@ -196,8 +196,8 @@ async fn db_login(request: HttpRequest, session: Session, config: Data<Config>, 
         Err(err) => return err,
     };
 
-    let db_backend = db_backend::new(&config);
-    let db = match KeePass::from_backend(&config, db_backend.as_ref(), &params, &user_info).await {
+    let mut db_backend = db_backend::new(&config);
+    let db = match KeePass::from_backend(&config, db_backend.as_mut(), &params, &user_info).await {
         Ok(v) => v,
         Err(err) => {
             rate_limiter.failure(&rate_key).await;
@@ -326,6 +326,44 @@ async fn logout(request: HttpRequest, session: Session, config: Data<Config>, db
             "data": logout_type,
         }
     ))
+}
+
+#[post("/save_db")]
+async fn save_db(session: Session, config: Data<Config>, db_cache: Data<DbCache>, params: web::Form<DbLogin>) -> impl Responder {
+    let username = session.get_user_id();
+
+    let keepass = match get_db(&session, &config, &db_cache).await {
+        Ok(v) => v,
+        Err(err) => return err,
+    };
+
+    let user_info = match get_user_info(&session) {
+        Ok(v) => v,
+        Err(err) => return err,
+    };
+
+    let mut db_backend = db_backend::new(&config);
+    let db_key = match KeePass::db_key_from_params_pub(db_backend.as_ref(), &params, &user_info).await {
+        Ok(k) => k,
+        Err(err) => {
+            info!("save_db from '{}': {}", username, err);
+            return HttpResponse::Unauthorized().json(json!({
+                "success": false,
+                "message": "incorrect key",
+            }));
+        }
+    };
+
+    if let Err(err) = keepass.to_backend_with_key(db_backend.as_mut(), db_key, &user_info).await {
+        error!("save_db from '{}': {}", username, err);
+        return HttpResponse::InternalServerError().json(json!({
+            "success": false,
+            "message": "failed to save database",
+        }));
+    }
+
+    info!("save_db from '{}': successful", username);
+    HttpResponse::Ok().json(json!({ "success": true }))
 }
 
 #[get("/callback_user_auth")]

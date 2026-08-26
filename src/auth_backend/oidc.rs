@@ -40,6 +40,7 @@ use openidconnect::core::{
     CoreGenderClaim,
     CoreIdToken,
     CoreJsonWebKey,
+    CoreJsonWebKeySet,
     CoreJsonWebKeyType,
     CoreJsonWebKeyUse,
     CoreJweContentEncryptionAlgorithm,
@@ -169,6 +170,7 @@ impl Oidc {
             .error_for_status()?
             .text()
             .await?;
+        let body = self.rewrite_server_endpoints(body, url)?;
         let metadata: ProviderMetadataWithLogout = serde_json::from_str(&body)?;
 
         // discover_async checks this and fetching from another url must not
@@ -184,7 +186,54 @@ impl Oidc {
             );
         }
 
-        Ok(metadata)
+        // openidconnect marks the jwks #[serde(skip)], so deserializing the
+        // document by hand leaves it empty and every token would fail to
+        // verify. discover_async fetches it separately; so must this path.
+        let jwks_body = self.http_client
+            .get(metadata.jwks_uri().url().as_str())
+            .send()
+            .await?
+            .error_for_status()?
+            .text()
+            .await?;
+        let jwks: CoreJsonWebKeySet = serde_json::from_str(&jwks_body)?;
+
+        Ok(metadata.set_jwks(jwks))
+    }
+
+    // Keycloak returns every endpoint with its external hostname even when the
+    // document is fetched from the internal one, so the app container cannot
+    // reach them. The endpoints it talks to itself are pointed back at the host
+    // the document came from; the ones the browser is sent to (authorization,
+    // end_session) keep the external host so redirects still work. The issuer
+    // is left alone: it is what the tokens are trusted against.
+    fn rewrite_server_endpoints(&self, body: String, discovery_url: &str) -> Result<String> {
+        let issuer = match &self.config.issuer {
+            Some(u) => u,
+            None => return Ok(body),
+        };
+
+        let discovery_origin = url_origin(discovery_url);
+        let issuer_origin = url_origin(issuer.as_str());
+
+        if discovery_origin == issuer_origin || discovery_origin.is_empty() || issuer_origin.is_empty() {
+            return Ok(body);
+        }
+
+        let mut json: serde_json::Value = serde_json::from_str(&body)?;
+        for field in [
+            "token_endpoint",
+            "jwks_uri",
+            "userinfo_endpoint",
+            "introspection_endpoint",
+            "revocation_endpoint",
+            "device_authorization_endpoint",
+        ] {
+            let Some(val) = json.get_mut(field) else { continue };
+            let Some(url_str) = val.as_str() else { continue };
+            *val = serde_json::Value::String(url_str.replacen(&issuer_origin, &discovery_origin, 1));
+        }
+        Ok(serde_json::to_string(&json)?)
     }
 
     async fn get_metadata(&self, cache: &AuthCache, force_refresh: bool) -> Result<ProviderMetadataWithLogout> {
@@ -394,6 +443,20 @@ impl AuthBackend for Oidc {
     }
 }
 
+fn url_origin(url: &str) -> String {
+    url::Url::parse(url)
+        .ok()
+        .map(|u| {
+            let mut s = format!("{}://{}", u.scheme(), u.host_str().unwrap_or(""));
+            if let Some(port) = u.port() {
+                s.push(':');
+                s.push_str(&port.to_string());
+            }
+            s
+        })
+        .unwrap_or_default()
+}
+
 #[cfg(test)]
 mod tests {
     use serde_json::json;
@@ -483,8 +546,52 @@ mod tests {
             .with_header("content-type", "application/json")
             .with_body(metadata(issuer).to_string())
             .create_async().await;
+        // jwks_uri is rewritten to the host the document came from, so the
+        // keys are fetched from the mock rather than from the issuer
+        let jwks = server.mock("GET", "/jwks")
+            .with_header("content-type", "application/json")
+            .with_body(json!({ "keys": [] }).to_string())
+            .create_async().await;
 
         assert!(oidc.get_metadata(&cache, true).await.is_ok());
         matching.assert_async().await;
+        jwks.assert_async().await;
+    }
+
+    #[tokio::test]
+    async fn only_the_server_to_server_endpoints_are_pointed_at_the_discovery_host() {
+        let issuer = "https://public.example.org";
+
+        let mut config = Config::default();
+        config.oidc.issuer = Some(Url::from_str(issuer).unwrap());
+        let oidc = Oidc::new(&config);
+
+        let body = json!({
+            "issuer": issuer,
+            "authorization_endpoint": format!("{}/auth", issuer),
+            "end_session_endpoint": format!("{}/logout", issuer),
+            "token_endpoint": format!("{}/token", issuer),
+            "jwks_uri": format!("{}/jwks", issuer),
+            "userinfo_endpoint": format!("{}/userinfo", issuer),
+        }).to_string();
+
+        let rewritten: serde_json::Value = serde_json::from_str(
+            &oidc.rewrite_server_endpoints(body, "http://keycloak:8080/metadata").unwrap()
+        ).unwrap();
+
+        // the app talks to these itself and has to reach them over the internal name
+        for field in ["token_endpoint", "jwks_uri", "userinfo_endpoint"] {
+            assert_eq!(
+                rewritten[field].as_str().unwrap(),
+                format!("http://keycloak:8080/{}", field.trim_end_matches("_endpoint").trim_end_matches("_uri")),
+                "{} was not pointed at the discovery host", field,
+            );
+        }
+
+        // the browser is sent to these, and it only knows the public name
+        assert_eq!(rewritten["authorization_endpoint"], format!("{}/auth", issuer));
+        assert_eq!(rewritten["end_session_endpoint"], format!("{}/logout", issuer));
+        // the issuer is what tokens are trusted against and must not move
+        assert_eq!(rewritten["issuer"], issuer);
     }
 }

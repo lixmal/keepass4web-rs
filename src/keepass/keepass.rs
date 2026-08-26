@@ -5,7 +5,8 @@ use base64;
 use base64::Engine;
 use base64::engine::general_purpose;
 use keepass::{Database, DatabaseKey};
-use keepass::db::{Icon, Node, Value};
+use keepass::config::DatabaseConfig;
+use keepass::db::{Entry as KpEntry, Group as KpGroup, Icon, Node, Value};
 use regex::Regex;
 use secrecy::{ExposeSecret, SecretString};
 use serde::Deserialize;
@@ -90,27 +91,62 @@ impl KeePass {
         Encrypted::encrypt(ser_db, &[], self.config.db_session_timeout)
     }
 
-    pub async fn from_backend(config: &Config, db_backend: &dyn DbBackend, params: &DbLogin, user_info: &UserInfo) -> Result<Self> {
+    pub async fn from_backend(config: &Config, db_backend: &mut dyn DbBackend, params: &DbLogin, user_info: &UserInfo) -> Result<Self> {
         let db_key = Self::db_key_from_params(db_backend, params, user_info).await?;
 
-        let mut reader = db_backend.get_db_read(user_info).await?;
+        // Read the database into an owned buffer. The reader (which borrows db_backend)
+        // is dropped when the async block completes, releasing the immutable borrow before
+        // we potentially need &mut db_backend to create a new database.
+        let load_result: Result<Vec<u8>> = async {
+            let mut reader = db_backend.get_db_read(user_info).await?;
+            let mut buf = vec![];
+            reader.read_to_end(&mut buf).await?;
+            Ok(buf)
+        }.await;
 
-        // bridge sync and async by caching the whole file in memory for now
-        let mut buf = vec![];
-        reader.read_to_end(&mut buf).await?;
+        let buf = match load_result {
+            Ok(buf) => buf,
+            Err(err) => {
+                // No database at the configured path yet — create a new empty one.
+                if err.downcast_ref::<std::io::Error>()
+                    .map(|e| e.kind() == std::io::ErrorKind::NotFound)
+                    .unwrap_or(false)
+                {
+                    return Self::create_new(config, db_backend, db_key, user_info).await;
+                }
+                return Err(err);
+            }
+        };
 
         let db = tokio::task::spawn_blocking(move || {
+            let mut buf = buf;
             let db = Database::open(&mut buf.as_slice(), db_key);
             buf.zeroize();
             db
         }).await??;
 
-        Ok(
-            KeePass {
-                config: config.clone(),
-                db,
-            }
-        )
+        Ok(KeePass { config: config.clone(), db })
+    }
+
+    async fn create_new(config: &Config, db_backend: &mut dyn DbBackend, db_key: DatabaseKey, user_info: &UserInfo) -> Result<Self> {
+        let db = Database::new(DatabaseConfig::default());
+
+        let mut buf: Vec<u8> = vec![];
+        let (result, mut buf, db) = tokio::task::spawn_blocking(move || {
+            let r = db.save(&mut buf, db_key);
+            (r, buf, db)
+        }).await?;
+        result.map_err(|e| anyhow!("failed to initialise new database: {}", e))?;
+
+        let (mut writer, rx) = db_backend.get_db_write(user_info).await?;
+        writer.write_all(&buf).await?;
+        buf.zeroize();
+        writer.shutdown().await?;
+        if let Some(rx) = rx {
+            rx.await??;
+        }
+
+        Ok(KeePass { config: config.clone(), db })
     }
 
     #[allow(dead_code)]
@@ -135,6 +171,10 @@ impl KeePass {
         }
 
         Ok(())
+    }
+
+    pub(crate) async fn db_key_from_params_pub(db_backend: &dyn DbBackend, params: &DbLogin, user_info: &UserInfo) -> Result<DatabaseKey> {
+        Self::db_key_from_params(db_backend, params, user_info).await
     }
 
     async fn db_key_from_params(db_backend: &dyn DbBackend, params: &DbLogin, user_info: &UserInfo) -> Result<DatabaseKey> {
@@ -163,6 +203,116 @@ impl KeePass {
         Ok(db_key)
     }
 
+
+    pub fn create_entry(
+        &mut self,
+        group_id: &Uuid,
+        title: &str,
+        username: &str,
+        password: &str,
+        url: &str,
+        notes: &str,
+        icon: Option<usize>,
+    ) -> Result<Uuid> {
+        let group = Self::find_group_by_id_mut(&mut self.db.root, group_id)
+            .ok_or(NotFoundError("group"))?;
+
+        let mut entry = KpEntry::new();
+        entry.fields.insert("Title".to_string(), Value::Unprotected(title.to_string()));
+        entry.fields.insert("UserName".to_string(), Value::Unprotected(username.to_string()));
+        if !password.is_empty() {
+            entry.fields.insert("Password".to_string(), Value::Protected(password.as_bytes().into()));
+        }
+        entry.fields.insert("URL".to_string(), Value::Unprotected(url.to_string()));
+        entry.fields.insert("Notes".to_string(), Value::Unprotected(notes.to_string()));
+        entry.icon_id = icon;
+
+        let uuid = entry.uuid;
+        group.add_child(entry);
+        Ok(uuid)
+    }
+
+    pub fn update_entry(
+        &mut self,
+        entry_id: &Uuid,
+        title: &str,
+        username: &str,
+        password: &str,
+        url: &str,
+        notes: &str,
+        icon: Option<usize>,
+    ) -> Result<()> {
+        let entry = Self::find_entry_by_id_mut(&mut self.db.root, entry_id)
+            .ok_or(NotFoundError("entry"))?;
+
+        entry.fields.insert("Title".to_string(), Value::Unprotected(title.to_string()));
+        entry.fields.insert("UserName".to_string(), Value::Unprotected(username.to_string()));
+        if !password.is_empty() {
+            entry.fields.insert("Password".to_string(), Value::Protected(password.as_bytes().into()));
+        }
+        entry.fields.insert("URL".to_string(), Value::Unprotected(url.to_string()));
+        entry.fields.insert("Notes".to_string(), Value::Unprotected(notes.to_string()));
+        if let Some(id) = icon {
+            entry.icon_id = Some(id);
+        }
+
+        Ok(())
+    }
+
+    pub fn create_group(&mut self, parent_id: &Uuid, name: &str) -> Result<Uuid> {
+        // Root accepts unlimited groups. Non-root groups are capped at 2 subgroups,
+        // which also blocks nesting beyond one level below root.
+        if *parent_id != self.db.root.uuid {
+            let parent = Self::find_group_by_id(&self.db.root, parent_id)
+                .ok_or(NotFoundError("group"))?;
+            let subgroup_count = parent.children.iter()
+                .filter(|n| matches!(n, Node::Group(_)))
+                .count();
+            if subgroup_count >= 2 {
+                return Err(anyhow!("a group may have at most 2 subgroups"));
+            }
+        }
+
+        let parent = Self::find_group_by_id_mut(&mut self.db.root, parent_id)
+            .ok_or(NotFoundError("group"))?;
+        let group = KpGroup::new(name);
+        let id = group.uuid;
+        parent.children.push(Node::Group(group));
+        Ok(id)
+    }
+
+    pub fn rename_group(&mut self, group_id: &Uuid, name: &str) -> Result<()> {
+        let group = Self::find_group_by_id_mut(&mut self.db.root, group_id)
+            .ok_or(NotFoundError("group"))?;
+        group.name = name.to_string();
+        Ok(())
+    }
+
+    pub fn delete_entry(&mut self, entry_id: &Uuid) -> Result<()> {
+        if !Self::remove_entry_from_group(&mut self.db.root, entry_id) {
+            return Err(NotFoundError("entry").into());
+        }
+        Ok(())
+    }
+
+    pub async fn to_backend_with_key(self, db_backend: &mut dyn DbBackend, db_key: DatabaseKey, user_info: &UserInfo) -> Result<()> {
+        let mut buf: Vec<u8> = vec![];
+        let (result, mut buf) = tokio::task::spawn_blocking(move || {
+            let r = self.db.save(&mut buf, db_key);
+            (r, buf)
+        }).await?;
+        result.map_err(|e| anyhow!("failed to save database: {}", e))?;
+
+        let (mut writer, rx) = db_backend.get_db_write(user_info).await?;
+        writer.write_all(&buf).await?;
+        buf.zeroize();
+        writer.shutdown().await?;
+        if let Some(rx) = rx {
+            rx.await??;
+        }
+
+        Ok(())
+    }
 
     pub fn get_groups(&self) -> Result<(Group, Option<Uuid>)> {
         let mut last_selected = self.db.meta.last_selected_group;
@@ -207,6 +357,7 @@ impl KeePass {
         }
 
         Ok(EntryGroup {
+            id: group.uuid,
             title: group.name.clone(),
             entries,
             icon: group.icon_id,
@@ -252,6 +403,7 @@ impl KeePass {
         let entries = Self::find_entries_by_string(&self.db.root, &rgx, &self.config.search);
 
         Ok(EntryGroup {
+            id: Uuid::nil(),
             title: format!("Search results for '{}'", params.term),
             entries,
             // search icon
@@ -322,6 +474,59 @@ impl KeePass {
         }
 
         None
+    }
+
+    fn find_group_by_id_mut<'a>(group: &'a mut KpGroup, id: &Uuid) -> Option<&'a mut KpGroup> {
+        if &group.uuid == id {
+            return Some(group);
+        }
+        for node in &mut group.children {
+            if let Node::Group(g) = node {
+                let found = Self::find_group_by_id_mut(g, id);
+                if found.is_some() {
+                    return found;
+                }
+            }
+        }
+        None
+    }
+
+    fn find_entry_by_id_mut<'a>(group: &'a mut KpGroup, id: &Uuid) -> Option<&'a mut KpEntry> {
+        for node in &mut group.children {
+            match node {
+                Node::Group(g) => {
+                    let found = Self::find_entry_by_id_mut(g, id);
+                    if found.is_some() {
+                        return found;
+                    }
+                }
+                Node::Entry(e) => {
+                    if &e.uuid == id {
+                        return Some(e);
+                    }
+                }
+            }
+        }
+        None
+    }
+
+    fn remove_entry_from_group(group: &mut KpGroup, id: &Uuid) -> bool {
+        let before = group.children.len();
+        group.children.retain(|node| match node {
+            Node::Entry(e) => &e.uuid != id,
+            _ => true,
+        });
+        if group.children.len() < before {
+            return true;
+        }
+        for node in &mut group.children {
+            if let Node::Group(g) = node {
+                if Self::remove_entry_from_group(g, id) {
+                    return true;
+                }
+            }
+        }
+        false
     }
 
     pub(crate) fn find_entries_by_string(group: &keepass::db::Group, term: &Regex, config: &Search) -> Vec<Entry> {

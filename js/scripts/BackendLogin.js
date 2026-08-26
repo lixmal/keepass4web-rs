@@ -3,8 +3,8 @@ import LoginForm from './LoginForm'
 import NavBar from './NavBar'
 import Alert from './Alert'
 import Info from './Info'
-
 import withNavigateHook from './nagivateHook'
+import { IconShield, IconKey, IconUser } from './Icons'
 
 class BackendLogin extends LoginForm {
     constructor() {
@@ -13,24 +13,31 @@ class BackendLogin extends LoginForm {
     }
 
     render() {
-        let tpl = KeePass4Web.getSettings().template
+        const tpl = KeePass4Web.getSettings().template
 
         if (!tpl)
             return null
 
-        let fields = []
-        for (let i in tpl.fields) {
-            let field = tpl.fields[i]
+        const fields = []
+        for (const i in tpl.fields) {
+            const field = tpl.fields[i]
+            const isPassword = field.type === 'password'
             fields.push(
-                <input
-                    key={field.field}
-                    className={'form-control ' + (field.type === 'password' ? 'password' : 'user')}
-                    type={field.type}
-                    ref={field.field}
-                    placeholder={field.placeholder}
-                    required={field.required ? 'required' : ''}
-                    autoFocus={field.autofocus ? 'autoFocus' : ''}
-                />
+                <div className="kp-login-field" key={field.field}>
+                    <label htmlFor={`kp-bl-${field.field}`}>
+                        {isPassword ? <IconKey size={13}/> : <IconUser size={13}/>}
+                        {field.placeholder || field.field}
+                    </label>
+                    <input
+                        id={`kp-bl-${field.field}`}
+                        className="kp-input"
+                        type={field.type}
+                        ref={field.field}
+                        placeholder={field.placeholder || ''}
+                        required={!!field.required}
+                        autoFocus={!!field.autofocus}
+                    />
+                </div>
             )
         }
 
@@ -40,14 +47,21 @@ class BackendLogin extends LoginForm {
                 <div className="container">
                     <div className={this.classes()}>
                         <form className="kp-login-inner" onSubmit={this.handleLogin}>
-                            <h4>
-                                {tpl.icon_src ?
-                                    <img className="backend-icon" src={tpl.icon_src}/>
-                                    : ''}
-                                {tpl.login_title}
-                            </h4>
+                            <div className="kp-login-icon">
+                                {tpl.icon_src
+                                    ? <img src={tpl.icon_src} style={{ width: 28, height: 28, objectFit: 'contain' }} alt=""/>
+                                    : <IconShield size={28}/>
+                                }
+                            </div>
+                            <h4>{tpl.login_title || 'Sign In'}</h4>
+                            <p className="kp-login-sub">Authenticate to access the vault</p>
+
                             {fields}
-                            <button className="btn btn-block btn-lg btn-success" type="submit">Login</button>
+
+                            <button className="kp-btn kp-btn-primary kp-btn-open" type="submit">
+                                Sign In
+                            </button>
+
                             <Alert error={this.state.error}/>
                             <Info info={this.props.location.state && this.props.location.state.info}/>
                         </form>

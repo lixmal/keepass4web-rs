@@ -45,9 +45,11 @@ pub struct BackendLogin {
 
 #[derive(Deserialize, ZeroizeOnDrop)]
 pub struct DbLogin {
-    #[serde(deserialize_with = "empty_string_is_none")]
+    // both are absent for a database that needs neither, and a caller that
+    // sends one is not made to send an empty other
+    #[serde(default, deserialize_with = "empty_string_is_none")]
     pub password: Option<String>,
-    #[serde(deserialize_with = "empty_box_is_none")]
+    #[serde(default, deserialize_with = "empty_box_is_none")]
     pub key: Option<Box<[u8]>>,
 }
 

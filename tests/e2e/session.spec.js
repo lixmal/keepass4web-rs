@@ -1,12 +1,12 @@
 const { test, expect } = require('@playwright/test');
-const { LOGIN_TIMEOUT, openDb, selectGroup, treeNode } = require('./helpers');
+const { LOGIN_TIMEOUT, byId, openDb, selectGroup, treeNode } = require('./helpers');
 
-const timer = (page) => page.locator('.navbar-text span').first();
+const timer = (page) => byId(page, 'db-timer').locator('span').first();
 
-// The user menu is a bootstrap dropdown, closed until its toggle is clicked.
+// The user menu stays closed until its toggle is clicked.
 async function openUserMenu(page) {
-  await page.locator('.dropdown-toggle').click();
-  await expect(page.locator('.dropdown-menu')).toBeVisible();
+  await byId(page, 'user-menu').click();
+  await expect(byId(page, 'user-menu-list')).toBeVisible();
 }
 
 test.describe('The database session', () => {
@@ -27,7 +27,7 @@ test.describe('The database session', () => {
     await expect.poll(() => timer(page).textContent(), { timeout: 10000 })
       .toMatch(/^00:04:5[0-6]$/);
 
-    await page.locator('.navbar-text label').click();
+    await byId(page, 'db-timer-reset').click();
 
     await expect.poll(() => timer(page).textContent(), { timeout: 5000 })
       .toMatch(/^00:0[45]:(00|59|58)$/);
@@ -47,7 +47,7 @@ test.describe('The database session', () => {
     await page.waitForURL(/\/db_login/, { timeout: LOGIN_TIMEOUT });
 
     await page.getByPlaceholder('Master Password').fill('test');
-    await page.getByRole('button', { name: 'Open' }).click();
+    await page.getByRole('button', { name: 'Open Vault' }).click();
 
     await page.waitForURL(/\/keepass/, { timeout: LOGIN_TIMEOUT });
     await expect(treeNode(page, 'group1')).toBeVisible();

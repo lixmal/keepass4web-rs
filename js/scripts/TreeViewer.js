@@ -1,54 +1,62 @@
 import React from 'react'
 import TreeNode from './TreeNode'
-
 import withNavigateHook from './nagivateHook'
-
+import { IconFolderRoot, IconPlus } from './Icons'
 
 class TreeViewer extends React.Component {
     render() {
-        var root = this.props.tree || {}
-        var tree = root.children
+        const root  = this.props.tree || {}
+        const nodes = root.children || []
 
-        var children = []
-        for (var i in tree) {
-            children.push(
-                <TreeNode
-                    node={tree[i]}
-                    level={1}
-                    visible={true}
-                    options={this.props}
-                    key={tree[i].id}
-                />
-            )
-        }
+        const children = nodes.map(n => (
+            <TreeNode
+                node={n}
+                level={1}
+                visible
+                options={this.props}
+                key={n.id}
+            />
+        ))
 
-        var srcurl
-        if (root.custom_icon_uuid) {
-            srcurl = 'api/v1/icon/' + encodeURIComponent(root.custom_icon_uuid)
-        } else {
-            srcurl = 'assets/img/icons/' + encodeURIComponent(root.icon || this.props.nodeIcon || '49') + '.png'
-        }
-        var nodeIcon = (
-            <img src={srcurl} className="kp-icon icon"/>
-        )
+        const folderCount = nodes.filter(n => n.children !== undefined).length || nodes.length
 
         return (
-            <div className="panel panel-default">
-                <div
-                    className="treeview-header panel-heading"
-                    onClick={this.props.nodeClick.bind(this, root)}
-                >
-                    {nodeIcon}
-                    {root.title}
+            <aside className={`kp-sidebar${this.props.open ? ' open' : ''}`} id="kp-sidebar">
+                <div className="kp-sidebar-header">
+                    <div>
+                        <div className="kp-sidebar-label">Groups</div>
+                        <div className="kp-sidebar-count">{folderCount} folder{folderCount !== 1 ? 's' : ''}</div>
+                    </div>
+                    {this.props.onAddRootGroup && (
+                        <button
+                            className="kp-sidebar-add"
+                            title="Add group to root"
+                            onClick={this.props.onAddRootGroup}
+                        >
+                            <IconPlus size={13}/>
+                        </button>
+                    )}
                 </div>
 
-                <ul className="treeview-body list-group">
-                    {children}
-                </ul>
-            </div>
+                <div className="kp-tree">
+                    {/* Root row */}
+                    <div
+                        className="kp-tree-item"
+                        data-testid="tree-root"
+                        onClick={() => this.props.nodeClick && this.props.nodeClick(root)}
+                    >
+                        <span style={{ width: 12, flexShrink: 0 }}/>
+                        <IconFolderRoot size={15}/>
+                        {root.title || 'Root'}
+                    </div>
+
+                    <div className="kp-tree-children">
+                        {children}
+                    </div>
+                </div>
+            </aside>
         )
     }
 }
-
 
 export default withNavigateHook(TreeViewer)

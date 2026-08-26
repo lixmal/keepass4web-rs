@@ -1,10 +1,12 @@
 const { test, expect } = require('@playwright/test');
-const { CARD_HEADER, DB, entryRow, entryRows, openDb, openEntry, selectGroup } = require('./helpers');
+const {
+  DB, entryRow, entryRows, entryTitle, fieldValue, groupTitle, openDb, openEntry, selectGroup,
+} = require('./helpers');
 
 async function search(page, term) {
   await page.getByPlaceholder('Search').fill(term);
   await page.getByPlaceholder('Search').press('Enter');
-  await expect(page.locator(`#group-viewer ${CARD_HEADER}`)).toHaveText(`Search results for '${term.trim()}'`);
+  await expect(groupTitle(page)).toHaveText(`Search results for '${term.trim()}'`);
 }
 
 test.describe('Searching entries', () => {
@@ -65,7 +67,7 @@ test.describe('Searching entries', () => {
 
     await search(page, DB.entry.title);
 
-    await expect(page.locator(`#node-viewer ${CARD_HEADER}`)).toHaveCount(0);
+    await expect(entryTitle(page)).toHaveCount(0);
   });
 
   test('opens an entry from the search results', async ({ page }) => {
@@ -73,6 +75,6 @@ test.describe('Searching entries', () => {
 
     await openEntry(page, DB.entry.clone);
 
-    await expect(page.locator('#node-viewer td', { hasText: DB.entry.username })).toBeVisible();
+    await expect(fieldValue(page, 'Username')).toHaveText(DB.entry.username);
   });
 });

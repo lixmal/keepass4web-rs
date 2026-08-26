@@ -1,7 +1,6 @@
 use actix_session::Session;
 use actix_web::HttpResponse;
 use anyhow::{anyhow, bail};
-use linux_keyutils::KeyError;
 use log::{error, info};
 use serde_json::json;
 
@@ -10,7 +9,7 @@ use crate::auth_backend::UserInfo;
 use crate::config::config::Config;
 use crate::keepass::db_cache::{CacheExpiredError, DbCache};
 use crate::keepass::keepass::KeePass;
-use crate::keepass::key::{KeyId, SecretKey};
+use crate::keepass::key::{KeyId, KeyUnavailableError, SecretKey};
 use crate::session::AuthSession;
 
 pub const SESSION_KEY_KEY_ID: &str = "key_id";
@@ -125,7 +124,7 @@ pub(crate) async fn get_db(session: &Session, config: &Config, db_cache: &DbCach
                 }
             );
 
-            return match err.downcast_ref::<KeyError>() {
+            return match err.downcast_ref::<KeyUnavailableError>() {
                 Some(_) => {
                     _close_db(session, config, db_cache).await?;
 
@@ -163,6 +162,60 @@ pub(crate) async fn db_is_open(session: &Session, config: &Config, db_cache: &Db
     Ok(true)
 }
 
+/// Decrypt the cached database, run `modify`, then re-encrypt and store back.
+/// The old session key is revoked and replaced with a fresh one.
+pub(crate) async fn modify_db<F>(
+    session: &Session,
+    config: &Config,
+    db_cache: &DbCache,
+    modify: F,
+) -> Result<(), HttpResponse>
+where
+    F: FnOnce(&mut KeePass) -> anyhow::Result<()>,
+{
+    let mut keepass = get_db(session, config, db_cache).await?;
+
+    if let Err(err) = modify(&mut keepass) {
+        return Err(HttpResponse::UnprocessableEntity().json(json!({
+            "success": false,
+            "message": err.to_string(),
+        })));
+    }
+
+    let (new_key, new_enc) = match keepass.to_enc() {
+        Ok(v) => v,
+        Err(err) => {
+            error!("failed to re-encrypt database after modification: {}", err);
+            return Err(HttpResponse::InternalServerError().json(json!({
+                "success": false,
+                "message": "failed to encrypt database",
+            })));
+        }
+    };
+
+    // Revoke the old key before storing the new one so it is replaced atomically
+    // from the session's perspective (the old key_id is still in the session here).
+    let _ = revoke_key(config, session);
+
+    if let Err(err) = store_key(config, session, new_key) {
+        error!("failed to store new key after modification: {}", err);
+        return Err(HttpResponse::InternalServerError().json(json!({
+            "success": false,
+            "message": "failed to store key",
+        })));
+    }
+
+    if let Err(err) = db_cache.store(session, new_enc).await {
+        error!("failed to store modified database: {}", err);
+        return Err(HttpResponse::InternalServerError().json(json!({
+            "success": false,
+            "message": "failed to store database",
+        })));
+    }
+
+    Ok(())
+}
+
 pub(crate) fn retrieve_key(config: &Config, session: &Session) -> anyhow::Result<SecretKey> {
     let key_id = session.get::<KeyId>(SESSION_KEY_KEY_ID)?
         .ok_or(anyhow!("failed to retrieve key id from session"))?;
@@ -197,12 +250,9 @@ pub(crate) fn revoke_key(config: &Config, session: &Session) -> anyhow::Result<(
 fn check_key_err<F>(ok: F, err: anyhow::Error) -> anyhow::Result<()>
     where F: Fn() -> anyhow::Result<()>
 {
-    match err.downcast_ref::<KeyError>() {
-        Some(e) => match e {
-            // Ignore non-existent, expired or already revoked
-            KeyError::KeyDoesNotExist | KeyError::KeyExpired | KeyError::KeyRevoked => ok(),
-            _ => Err(err),
-        }
+    // Ignore non-existent, expired or already revoked
+    match err.downcast_ref::<KeyUnavailableError>() {
+        Some(_) => ok(),
         None => Err(err),
     }
 }
