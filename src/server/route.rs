@@ -10,16 +10,22 @@ use crate::server::route::auth::{
     close_db,
     db_login,
     logout,
+    save_db,
     user_login,
 };
 use crate::server::route::keepass::{
+    create_entry,
+    create_group,
+    delete_entry,
     get_entry,
     get_file,
     get_group_entries,
     get_groups,
     get_icon,
     get_protected,
+    rename_group,
     search_entries,
+    update_entry,
 };
 
 pub mod auth;
@@ -41,6 +47,7 @@ pub fn setup_routes(cfg: &mut web::ServiceConfig) {
             .service(db_login)
             .service(close_db)
             .service(logout)
+            .service(save_db)
 
             // keepass
             .service(get_groups)
@@ -50,6 +57,11 @@ pub fn setup_routes(cfg: &mut web::ServiceConfig) {
             .service(get_file)
             .service(search_entries)
             .service(get_icon)
+            .service(create_entry)
+            .service(update_entry)
+            .service(delete_entry)
+            .service(create_group)
+            .service(rename_group)
         )
 
         .service(callback_user_auth)

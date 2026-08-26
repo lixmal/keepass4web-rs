@@ -1,10 +1,12 @@
 const { test, expect } = require('@playwright/test');
-const { CARD_HEADER, DB, entryRow, entryRows, openDb, openEntry, selectGroup } = require('./helpers');
+const {
+  CARD_HEADER, DB, entryRow, entryRows, groupTitle, openDb, openEntry, selectGroup,
+} = require('./helpers');
 
 async function search(page, term) {
   await page.getByPlaceholder('Search').fill(term);
   await page.getByPlaceholder('Search').press('Enter');
-  await expect(page.locator(`#group-viewer ${CARD_HEADER}`)).toHaveText(`Search results for '${term.trim()}'`);
+  await expect(groupTitle(page)).toHaveText(`Search results for '${term.trim()}'`);
 }
 
 test.describe('Searching entries', () => {

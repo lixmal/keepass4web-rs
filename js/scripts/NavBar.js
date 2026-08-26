@@ -118,6 +118,17 @@ class NavBar extends React.Component {
             }
         }
 
+        const saveBtn = this.props.onSaveDb ? (
+            <ul className="nav navbar-nav navbar-right">
+                <li>
+                    <a href="" onClick={(e) => { e.preventDefault(); this.props.onSaveDb() }}
+                       title="Save database to disk">
+                        <span className="glyphicon glyphicon-floppy-disk"></span> Save
+                    </a>
+                </li>
+            </ul>
+        ) : null
+
         return (
             <nav className="navbar navbar-default navbar-fixed-top">
                 <div className="navbar-header">
@@ -133,6 +144,7 @@ class NavBar extends React.Component {
                 </div>
                 <div className="collapse navbar-collapse" id="navbar-collapse-1">
                     {search}
+                    {saveBtn}
                     <ul className="nav navbar-nav navbar-right">
                         <li className="dropdown">
                             <a href="" className="dropdown-toggle" data-toggle="dropdown" role="button"

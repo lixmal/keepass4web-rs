@@ -1,15 +1,49 @@
 use actix_session::Session;
-use actix_web::{get, HttpResponse, Responder, web};
+use actix_web::{delete, get, post, put, HttpResponse, Responder, web};
 use actix_web::web::Data;
 use log::info;
+use serde::Deserialize;
 use serde_json::json;
 use secrecy::ExposeSecret;
+use uuid::Uuid;
 
 use crate::config::config::Config;
 use crate::keepass::db_cache::DbCache;
 use crate::keepass::keepass::{File, Id, NotFoundError, Protected, SearchTerm};
 use crate::server::route::util;
 use crate::session::AuthSession;
+
+#[derive(Deserialize)]
+struct NewEntry {
+    group_id: Uuid,
+    title: String,
+    username: String,
+    password: String,
+    url: String,
+    notes: String,
+}
+
+#[derive(Deserialize)]
+struct UpdateEntry {
+    id: Uuid,
+    title: String,
+    username: String,
+    password: String,
+    url: String,
+    notes: String,
+}
+
+#[derive(Deserialize)]
+struct NewGroup {
+    parent_id: Uuid,
+    title: String,
+}
+
+#[derive(Deserialize)]
+struct RenameGroup {
+    id: Uuid,
+    title: String,
+}
 
 // 404 for missing entries/groups/icons, 500 for everything else
 fn error_response(err: &anyhow::Error, message: &str) -> HttpResponse {
@@ -215,6 +249,94 @@ fn icon_mime(data: &[u8]) -> &'static str {
         // previous behavior, custom icons are usually png
         "image/png"
     }
+}
+
+#[post("/entry")]
+async fn create_entry(session: Session, config: Data<Config>, db_cache: Data<DbCache>, params: web::Form<NewEntry>) -> impl Responder {
+    let username = session.get_user_id();
+    let mut new_id = Uuid::nil();
+
+    if let Err(err) = util::modify_db(&session, &config, &db_cache, |kp| {
+        new_id = kp.create_entry(
+            &params.group_id,
+            &params.title,
+            &params.username,
+            &params.password,
+            &params.url,
+            &params.notes,
+        )?;
+        Ok(())
+    }).await {
+        return err;
+    }
+
+    info!("create_entry from '{}': {}", username, new_id);
+    HttpResponse::Ok().json(json!({ "success": true, "data": { "id": new_id } }))
+}
+
+#[put("/entry")]
+async fn update_entry(session: Session, config: Data<Config>, db_cache: Data<DbCache>, params: web::Form<UpdateEntry>) -> impl Responder {
+    let username = session.get_user_id();
+
+    if let Err(err) = util::modify_db(&session, &config, &db_cache, |kp| {
+        kp.update_entry(
+            &params.id,
+            &params.title,
+            &params.username,
+            &params.password,
+            &params.url,
+            &params.notes,
+        )
+    }).await {
+        return err;
+    }
+
+    info!("update_entry from '{}': {}", username, params.id);
+    HttpResponse::Ok().json(json!({ "success": true }))
+}
+
+#[post("/group")]
+async fn create_group(session: Session, config: Data<Config>, db_cache: Data<DbCache>, params: web::Form<NewGroup>) -> impl Responder {
+    let username = session.get_user_id();
+    let mut new_id = Uuid::nil();
+
+    if let Err(err) = util::modify_db(&session, &config, &db_cache, |kp| {
+        new_id = kp.create_group(&params.parent_id, &params.title)?;
+        Ok(())
+    }).await {
+        return err;
+    }
+
+    info!("create_group from '{}': {} under {}", username, params.title, params.parent_id);
+    HttpResponse::Ok().json(json!({ "success": true, "data": { "id": new_id } }))
+}
+
+#[put("/group")]
+async fn rename_group(session: Session, config: Data<Config>, db_cache: Data<DbCache>, params: web::Form<RenameGroup>) -> impl Responder {
+    let username = session.get_user_id();
+
+    if let Err(err) = util::modify_db(&session, &config, &db_cache, |kp| {
+        kp.rename_group(&params.id, &params.title)
+    }).await {
+        return err;
+    }
+
+    info!("rename_group from '{}': {} -> '{}'", username, params.id, params.title);
+    HttpResponse::Ok().json(json!({ "success": true }))
+}
+
+#[delete("/entry")]
+async fn delete_entry(session: Session, config: Data<Config>, db_cache: Data<DbCache>, params: web::Query<Id>) -> impl Responder {
+    let username = session.get_user_id();
+
+    if let Err(err) = util::modify_db(&session, &config, &db_cache, |kp| {
+        kp.delete_entry(&params.id)
+    }).await {
+        return err;
+    }
+
+    info!("delete_entry from '{}': {}", username, params.id);
+    HttpResponse::Ok().json(json!({ "success": true }))
 }
 
 #[cfg(test)]

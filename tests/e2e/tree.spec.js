@@ -1,5 +1,7 @@
 const { test, expect } = require('@playwright/test');
-const { CARD_HEADER, DB, entryRow, entryRows, openDb, selectGroup, treeNode } = require('./helpers');
+const {
+  CARD_HEADER, DB, entryRow, entryRows, groupTitle, openDb, selectGroup, treeNode,
+} = require('./helpers');
 
 test.describe('Browsing groups', () => {
   test.beforeEach(async ({ page }) => {
@@ -15,10 +17,9 @@ test.describe('Browsing groups', () => {
     await selectGroup(page, 'group1');
 
     await expect(entryRows(page)).toHaveCount(2);
-    await expect(entryRow(page, DB.entry.title).locator('td')).toHaveText([
-      DB.entry.title,
-      DB.entry.username,
-    ]);
+    const row = entryRow(page, DB.entry.title);
+    await expect(row.locator('[data-testid="entry-row-title"]')).toHaveText(DB.entry.title);
+    await expect(row.locator('[data-testid="entry-row-username"]')).toHaveText(DB.entry.username);
     await expect(entryRow(page, DB.entry.clone)).toBeVisible();
   });
 
@@ -64,7 +65,7 @@ test.describe('Browsing groups', () => {
   test('selecting the root group shows it without entries', async ({ page }) => {
     await page.locator('.treeview-header').click();
 
-    await expect(page.locator(`#group-viewer ${CARD_HEADER}`)).toHaveText(DB.root);
+    await expect(groupTitle(page)).toHaveText(DB.root);
     await expect(entryRows(page)).toHaveCount(0);
   });
 });

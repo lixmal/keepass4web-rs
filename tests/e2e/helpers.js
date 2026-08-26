@@ -53,9 +53,13 @@ function treeNode(page, title) {
   return page.locator('.treeview-body .list-group-item').filter({ hasText: exactly(title) });
 }
 
+// The group heading carries the group actions beside its title, so the title
+// is addressed on its own rather than through the heading's whole text.
+const groupTitle = (page) => page.locator('[data-testid="group-title"]');
+
 async function selectGroup(page, title) {
   await treeNode(page, title).click();
-  await expect(page.locator(`#group-viewer ${CARD_HEADER}`)).toHaveText(title);
+  await expect(groupTitle(page)).toHaveText(title);
 }
 
 function entryRows(page) {
@@ -63,7 +67,9 @@ function entryRows(page) {
 }
 
 function entryRow(page, title) {
-  return entryRows(page).filter({ has: page.locator('td').filter({ hasText: exactly(title) }) });
+  return entryRows(page).filter({
+    has: page.locator('[data-testid="entry-row-title"]').filter({ hasText: exactly(title) }),
+  });
 }
 
 async function openEntry(page, title) {
@@ -102,6 +108,7 @@ module.exports = {
   fieldRow,
   fieldValue,
   gotoLogin,
+  groupTitle,
   ICON_HIDDEN,
   ICON_SHOWN,
   openDb,

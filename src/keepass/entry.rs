@@ -19,6 +19,7 @@ pub struct Group {
 
 #[derive(Serialize)]
 pub struct EntryGroup {
+    pub id: Uuid,
     pub title: String,
     pub icon: Option<usize>,
     pub custom_icon_uuid: Option<Uuid>,
