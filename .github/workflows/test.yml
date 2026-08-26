@@ -51,6 +51,9 @@ jobs:
         run: npm ci
       - name: Install Playwright browsers
         run: npx playwright install --with-deps chromium
+      # the compatibility specs check the written database with another client
+      - name: Install keepassxc-cli
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends keepassxc
       - name: Build frontend
         run: npm run build
       - name: Build backend

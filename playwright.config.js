@@ -2,6 +2,8 @@ const { defineConfig, devices } = require('@playwright/test');
 
 // Keep in sync with `port` in tests/config.test.yml.
 const baseURL = 'http://localhost:8181';
+// Keep in sync with `port` in tests/config.compat.yml.
+const compatURL = 'http://localhost:8182';
 
 module.exports = defineConfig({
   testDir: './tests/e2e',
@@ -25,18 +27,34 @@ module.exports = defineConfig({
     },
   ],
 
-  webServer: {
-    // release build: every test opens the database, and the KDF takes seconds
-    // in a debug build
-    command: 'cargo run --release -- --config ./tests/config.test.yml',
-    url: baseURL,
-    reuseExistingServer: !process.env.CI,
-    cwd: process.cwd(),
-    timeout: 300 * 1000,
-    stdout: 'pipe',
-    stderr: 'pipe',
-    env: {
-      RUST_LOG: 'info',
+  webServer: [
+    {
+      // release build: every test opens the database, and the KDF takes seconds
+      // in a debug build
+      command: 'cargo run --release -- --config ./tests/config.test.yml',
+      url: baseURL,
+      reuseExistingServer: !process.env.CI,
+      cwd: process.cwd(),
+      timeout: 300 * 1000,
+      stdout: 'pipe',
+      stderr: 'pipe',
+      env: {
+        RUST_LOG: 'info',
+      },
     },
-  },
+    {
+      // the compatibility specs write to the database, so they get their own
+      // instance on a copy of the fixture
+      command: 'cargo run --release -- --config ./tests/config.compat.yml',
+      url: compatURL,
+      reuseExistingServer: !process.env.CI,
+      cwd: process.cwd(),
+      timeout: 300 * 1000,
+      stdout: 'pipe',
+      stderr: 'pipe',
+      env: {
+        RUST_LOG: 'info',
+      },
+    },
+  ],
 });
