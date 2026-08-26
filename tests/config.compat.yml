@@ -1,0 +1,29 @@
+##################################
+### KeePass4Web compat config  ###
+##################################
+
+# Second instance for the KeePassXC compatibility tests, which write to the
+# database and must not touch the fixture the other specs read.
+
+db_backend: 'Filesystem'
+auth_backend: 'None'
+
+Filesystem:
+    db_location: './tests/tmp/compat.kdbx'
+
+db_session_timeout: '5 minutes'
+session_lifetime: '30 minutes'
+cookie_samesite: 'strict'
+
+listen: '127.0.0.1'
+port: 8182
+
+search:
+  fields:
+    - title
+    - username
+    - tags
+    - notes
+    - url
+  extra_fields: true
+  allow_regex: false
