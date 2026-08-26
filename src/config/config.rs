@@ -35,6 +35,9 @@ pub struct Config {
     pub session_lifetime: Duration,
     #[serde(with = "SameSiteDef")]
     pub cookie_samesite: cookie::SameSite,
+    // only enable behind a reverse proxy: forwarding headers are
+    // client-controlled and would let rate limiting be evaded
+    pub trust_proxy_headers: bool,
     pub search: Search,
     #[serde(alias = "LDAP", alias = "Ldap")]
     pub ldap: Ldap,
@@ -63,6 +66,7 @@ impl Default for Config {
             // 1 hour
             session_lifetime: Duration::from_secs(60 * 60),
             cookie_samesite: cookie::SameSite::Strict,
+            trust_proxy_headers: false,
             search: Default::default(),
             ldap: Default::default(),
             oidc: Default::default(),

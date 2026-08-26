@@ -9,6 +9,7 @@ mod config;
 mod server;
 mod auth;
 mod keepass;
+mod rate_limit;
 mod session;
 
 const CONFIG_FILE: &str = "config.yml";
