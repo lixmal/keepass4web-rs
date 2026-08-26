@@ -54,19 +54,23 @@ async fn authenticated(session: Session, config: Data<Config>, db_cache: Data<Db
 }
 
 
+// forwarding headers are spoofable, only honor them when explicitly
+// configured (i.e. behind a reverse proxy that sets them)
+fn client_ip(request: &HttpRequest, config: &Config) -> String {
+    if config.trust_proxy_headers {
+        return request.connection_info().realip_remote_addr().unwrap_or("unknown").to_string();
+    }
+
+    request.peer_addr().map(|addr| addr.ip().to_string()).unwrap_or_else(|| "unknown".to_string())
+}
+
 #[post("/user_login")]
 async fn user_login(request: HttpRequest, session: Session, config: Data<Config>, rate_limiter: Data<RateLimiter>, params: web::Form<UserLogin>) -> impl Responder {
     if let Err(err) = check_user_session(&session, &params.username) {
         return err;
     }
 
-    // forwarding headers are spoofable, only honor them when explicitly
-    // configured (i.e. behind a reverse proxy that sets them)
-    let client_ip = if config.trust_proxy_headers {
-        request.connection_info().realip_remote_addr().unwrap_or("unknown").to_string()
-    } else {
-        request.peer_addr().map(|addr| addr.ip().to_string()).unwrap_or_else(|| "unknown".to_string())
-    };
+    let client_ip = client_ip(&request, &config);
     let rate_key = format!("{}|{}", client_ip, params.username.to_lowercase());
     if let Some(remaining) = rate_limiter.check(&rate_key).await {
         info!("user login from '{}' ({}): rate limited for {}s", params.username, client_ip, remaining.as_secs());
@@ -157,8 +161,21 @@ async fn backend_login(session: Session, config: Data<Config>, params: web::Form
 }
 
 #[post("/db_login")]
-async fn db_login(session: Session, config: Data<Config>, db_cache: Data<DbCache>, params: web::Form<DbLogin>) -> impl Responder {
+async fn db_login(request: HttpRequest, session: Session, config: Data<Config>, db_cache: Data<DbCache>, rate_limiter: Data<RateLimiter>, params: web::Form<DbLogin>) -> impl Responder {
     let username = session.get_user_id();
+
+    // the master password guards the database itself, so it is throttled like
+    // the user login, keyed by the user it belongs to
+    let rate_key = format!("{}|db|{}", client_ip(&request, &config), username);
+    if let Some(remaining) = rate_limiter.check(&rate_key).await {
+        info!("db login from '{}': rate limited for {}s", username, remaining.as_secs());
+        return HttpResponse::TooManyRequests().json(json!(
+            {
+                "success": false,
+                "message": "too many failed login attempts, try again later",
+            }
+        ));
+    }
 
     let is_open = match db_is_open(&session, &config, &db_cache).await {
         Ok(v) => v,
@@ -183,6 +200,7 @@ async fn db_login(session: Session, config: Data<Config>, db_cache: Data<DbCache
     let db = match KeePass::from_backend(&config, db_backend.as_ref(), &params, &user_info).await {
         Ok(v) => v,
         Err(err) => {
+            rate_limiter.failure(&rate_key).await;
             info!("db login from '{}': {}", username, err);
 
             return HttpResponse::Unauthorized().json(json!(
@@ -193,6 +211,8 @@ async fn db_login(session: Session, config: Data<Config>, db_cache: Data<DbCache
             ));
         }
     };
+
+    rate_limiter.success(&rate_key).await;
 
     let (key, enc_db) = match db.to_enc() {
         Ok(v) => v,
