@@ -1,0 +1,170 @@
+##############################################################
+### config.example.yml — copy-and-edit reference            ###
+###                                                          ###
+### Values for LDAP and OIDC match the test services in     ###
+### docker-compose.yml / .env.example exactly.  Enable the  ###
+### matching service in docker-compose.yml, set             ###
+### auth_backend below, and the app will work immediately.  ###
+###                                                          ###
+### For production deployments replace every value that     ###
+### says "example", "test", or "insecure" with your own.    ###
+##############################################################
+
+# Where to get KeePass databases from.
+# Available: Filesystem, HTTP
+db_backend: 'Filesystem'
+
+# Authentication backend — pick ONE, configure its section below.
+# Available: None, htpasswd, LDAP, OIDC
+#
+#   None     — no authentication (single-user / trusted-network only)
+#   htpasswd — local password file (bcrypt); good for small teams
+#   LDAP     — OpenLDAP / Active Directory
+#   OIDC     — OpenID Connect (Keycloak, Authentik, Azure AD, …)
+#
+auth_backend: 'htpasswd'
+
+
+### Database backends ###
+
+# db_backend: Filesystem
+Filesystem:
+    db_location: './db.kdbx'
+    # optional key file — storing key files on the server is not recommended
+    # keyfile_location: './db.key'
+
+# db_backend: HTTP  (fetch database over HTTP/HTTPS)
+# HTTP:
+#     database_url: 'https://files.example.com/db.kdbx'
+#     # keyfile_url: 'https://files.example.com/db.key'
+#     # credentials:
+#     #   username: 'fileuser'
+#     #   password: 'filepassword'
+#     # bearer: 'token-here'
+
+
+### Authentication backends ###
+
+# auth_backend: htpasswd
+# Create .htpasswd with: htpasswd -cB .htpasswd <username>
+htpasswd:
+    path: '.htpasswd'
+
+
+# ──────────────────────────────────────────────────────────────
+# LDAP example — matches the docker-compose OpenLDAP test service
+# (bitnami/openldap, seeded via LDAP_TEST_USER / LDAP_TEST_PASSWORD
+# from .env.example; uncomment the 'openldap:' block in docker-compose.yml)
+#
+# To use: set auth_backend: 'LDAP', fill in your real values below.
+# ──────────────────────────────────────────────────────────────
+# LDAP:
+#     # LDAP server URI
+#     # docker-compose service: ldap://openldap:1389
+#     # running the app outside compose: ldap://127.0.0.1:1389
+#     uri: 'ldap://openldap:1389'
+#
+#     # search scope: subtree (all sub-nodes), one (immediate children), base
+#     scope: 'subtree'
+#
+#     # search base distinguished name
+#     base_dn: 'ou=users,dc=example,dc=org'
+#
+#     # extra filter combined with the login attribute match:
+#     #   (&(<login_attribute>=<username>)<filter>)
+#     # leave empty to match on the login attribute only
+#     filter: '(objectClass=inetOrgPerson)'
+#
+#     # attribute used for login (must be unique per user)
+#     # Active Directory:  sAMAccountName  or  userPrincipalName
+#     # OpenLDAP / 389 DS: uid
+#     login_attribute: 'uid'
+#
+#     # DN and password for the read-only bind used to search the directory
+#     # (leave empty for anonymous bind if your LDAP allows it)
+#     bind: 'cn=admin,dc=example,dc=org'
+#     password: 'adminpassword'
+#
+#     # optional: per-user KeePass database / key file locations
+#     # stored as LDAP attributes on the user object
+#     # leave commented out to use the static Filesystem/HTTP location above
+#     # database_attribute: 'keePass'
+#     # keyfile_attribute:  'keePassKeyFile'
+
+
+# ──────────────────────────────────────────────────────────────
+# OIDC example — matches the docker-compose Keycloak test service
+# (realm 'keepass' auto-imported from tests/keycloak/realm.json;
+# uncomment the 'keycloak:' block in docker-compose.yml)
+#
+# Pre-provisioned: client 'keepass4web', user testuser / testpass.
+# Admin console:   http://localhost:8180  (KC_ADMIN_USERNAME/PASSWORD from .env)
+#
+# To use: set auth_backend: 'OIDC', fill in your real values below.
+# Note: OIDC redirect requires cookie_samesite: 'lax' (see below).
+# ──────────────────────────────────────────────────────────────
+# OIDC:
+#     # Issuer URL (the OpenID Connect discovery endpoint is <issuer>/.well-known/openid-configuration)
+#     # docker-compose service and outside compose: http://keycloak:8180/realms/keepass
+#     # (Keycloak runs on port 8180; keepass app is on 8080)
+#     issuer: 'http://keycloak:8180/realms/keepass'
+#
+#     client_id: 'keepass4web'
+#     client_secret: 'insecure-example-client-secret'
+#
+#     # save the ID token in the session for cleaner single-logout
+#     # disable if the token is too large for the session cookie
+#     save_id_token: true
+#
+#     scopes:
+#       - 'profile'
+#       # add the 'keepass' scope if your IdP is configured to return
+#       # database_location / keyfile_location claims per user
+#       # - 'keepass'
+
+
+### General settings ###
+
+# Time before the database is automatically closed (user idle timeout).
+# User must re-enter the database master password after this.
+db_session_timeout: '10 minutes'
+
+# How often to re-check whether the auth backend has changed
+# (used to refresh the login page for idling users).
+auth_check_interval: '1 hour 5 minutes'
+
+search:
+  # Entry fields included in keyword search
+  fields:
+    - title
+    - username
+    - tags
+    - notes
+    - url
+  # also search custom fields and attachment file names
+  extra_fields: true
+  # allow regular expressions in search terms
+  allow_regex: false
+
+# Secret key for signing session cookies.
+# Must be at least 64 bytes, from a cryptographically secure source.
+# Generated on the fly when omitted — sessions do not survive restarts.
+# Set a static value to keep sessions across restarts.
+# session_secret_key: ''
+
+# How long a session cookie lives in the browser.
+session_lifetime: '1 hour'
+
+# SameSite policy for the session cookie: strict / lax / none
+# Use 'lax' when auth_backend is OIDC (redirect flow requires it).
+cookie_samesite: 'strict'
+# cookie_samesite: 'lax'   # ← uncomment when using OIDC
+
+# Trust Forwarded / X-Forwarded-For headers for the client IP.
+# Used by login rate limiting.  Only enable when running behind a
+# reverse proxy you control; these headers are client-spoofable otherwise.
+trust_proxy_headers: false
+
+
+listen: '::'
+port:   8080
