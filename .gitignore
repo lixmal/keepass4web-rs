@@ -14,9 +14,6 @@ playwright-report/
 # vim
 *.sw[a-z]
 
-# bootstrap
-public/fonts/*
-
 # data
 *.kdbx
 

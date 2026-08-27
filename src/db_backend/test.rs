@@ -1,4 +1,3 @@
-use std::any::Any;
 use std::pin::Pin;
 
 use anyhow::Result;
@@ -34,10 +33,6 @@ impl DbBackend for Test {
                 None
             )
         )
-    }
-
-    fn as_any(&mut self) -> &mut dyn Any {
-        self
     }
 }
 

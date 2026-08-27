@@ -226,15 +226,6 @@ body:has(.kp-app) {
 }
 .kp-btn-outline:hover { background: var(--kp-surface-hover); border-color: #b3b9c4; }
 
-.kp-btn-danger-ghost {
-  background: transparent;
-  color: var(--kp-text-muted);
-  border: none;
-  padding: 5px 7px;
-  border-radius: var(--kp-r-sm);
-}
-.kp-btn-danger-ghost:hover { background: var(--kp-danger-bg); color: var(--kp-danger); }
-
 .kp-btn-icon {
   background: transparent;
   color: var(--kp-text-muted);
@@ -359,25 +350,6 @@ body:has(.kp-app) {
 .kp-tree-item.active .kp-tree-icon { opacity: 1; }
 
 .kp-tree-children { padding-left: 18px; }
-
-/* inline group rename */
-.kp-tree-rename {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  padding: 4px 8px;
-  margin-bottom: 1px;
-}
-.kp-tree-rename input {
-  flex: 1;
-  padding: 4px 8px;
-  border: 1px solid var(--kp-focus);
-  border-radius: var(--kp-r-sm);
-  font-size: 13px;
-  font-family: inherit;
-  outline: none;
-  box-shadow: 0 0 0 2px rgba(76,154,255,.18);
-}
 
 /* ─── CENTER PANEL ───────────────────────────────────────── */
 .kp-center {
@@ -512,10 +484,10 @@ body:has(.kp-app) {
   align-items: center; justify-content: center;
   padding: 40px 24px;
   color: var(--kp-text-muted);
-  text-align: center; gap: 10px;
+  font-size: 13px;
+  text-align: center; gap: 8px;
 }
-.kp-detail-empty svg { opacity: .25; }
-.kp-detail-empty p { font-size: 13px; }
+.kp-detail-empty span { font-size: 32px; }
 
 .kp-detail-header {
   display: flex;
@@ -554,8 +526,6 @@ body:has(.kp-app) {
 
 /* ─── FORM ───────────────────────────────────────────────── */
 .kp-form { padding: 20px; display: flex; flex-direction: column; gap: 16px; }
-
-.kp-form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
 
 .kp-field { display: flex; flex-direction: column; gap: 5px; }
 .kp-field label {
@@ -621,8 +591,7 @@ textarea.kp-input {
 .kp-node { padding: 0; display: flex; flex-direction: column; }
 .kp-node-fields { display: flex; flex-direction: column; }
 
-.kp-node-section-label,
-.kp-node-section-header {
+.kp-node-section-label {
   padding: 10px 20px 6px;
   font-size: 11px; font-weight: 700;
   text-transform: uppercase; letter-spacing: .06em;
@@ -660,15 +629,6 @@ textarea.kp-input {
 .kp-node-field-value a { color: var(--kp-primary); text-decoration: none; }
 .kp-node-field-value a:hover { text-decoration: underline; }
 .kp-node-field-actions { display: flex; gap: 4px; flex-shrink: 0; }
-.kp-node-section-header {
-  padding: 10px 20px 6px;
-  font-size: 11px; font-weight: 700;
-  text-transform: uppercase; letter-spacing: .06em;
-  color: var(--kp-text-muted);
-  background: var(--kp-bg);
-  border-bottom: 1px solid var(--kp-border);
-}
-
 /* ─── LOADING MASK ───────────────────────────────────────── */
 .kp-loading { position: relative; }
 .kp-loading::before {
@@ -691,24 +651,7 @@ textarea.kp-input {
 }
 @keyframes kp-spin { to { transform: rotate(360deg); } }
 
-/* ─── DETAIL NOTE ────────────────────────────────────────── */
-.kp-detail-note {
-  margin: 0 20px 20px;
-  padding: 10px 14px;
-  background: var(--kp-bg); border: 1px solid var(--kp-border);
-  border-radius: var(--kp-r); font-size: 12px; color: var(--kp-text-muted);
-  line-height: 1.6;
-}
-
 /* ─── OVERLAY (mobile) ───────────────────────────────────── */
-.kp-overlay {
-  display: none;
-  position: fixed; inset: 0;
-  background: rgba(0,0,0,.35);
-  z-index: 49;
-}
-.kp-overlay.show { display: block; }
-
 .kp-sidebar-overlay {
   position: fixed; inset: 0;
   background: rgba(0,0,0,.35);
@@ -775,7 +718,6 @@ textarea.kp-input {
 
 @media (max-width: 480px) {
   .kp-nav-search { display: none; }
-  .kp-form-row { grid-template-columns: 1fr; }
 }
 
 /* ─── LOGIN PAGE ─────────────────────────────────────────── */

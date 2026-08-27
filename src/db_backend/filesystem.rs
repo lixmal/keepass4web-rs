@@ -1,4 +1,3 @@
-use std::any::Any;
 use std::future::Future;
 use std::io;
 use std::path::{Path, PathBuf};
@@ -76,10 +75,6 @@ impl DbBackend for Filesystem {
                 None
             )
         )
-    }
-
-    fn as_any(&mut self) -> &mut dyn Any {
-        self
     }
 
     fn validate_config(&self) -> Result<()> {
