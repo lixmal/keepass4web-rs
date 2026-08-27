@@ -1,6 +1,6 @@
 import '../style/app.css'
 import React from 'react'
-import ReactDOM from 'react-dom'
+import {createRoot} from 'react-dom/client'
 
 import {BrowserRouter, Route, Routes} from 'react-router-dom'
 
@@ -190,7 +190,7 @@ KeePass4Web.error = function (error) {
 }
 
 
-ReactDOM.render(
+createRoot(document.getElementById('app-content')).render(
     <BrowserRouter>
         <Routes>
             <Route path="/" index Component={Splash}/>
@@ -200,6 +200,5 @@ ReactDOM.render(
             <Route path="/db_login" Component={DBLogin}/>
             <Route path="/callback_user_auth" Component={CallbackUserAuth}/>
         </Routes>
-    </BrowserRouter>,
-    document.getElementById('app-content')
+    </BrowserRouter>
 )

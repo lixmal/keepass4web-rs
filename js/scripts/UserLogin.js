@@ -10,6 +10,8 @@ class UserLogin extends LoginForm {
     constructor() {
         super()
         this.url = 'user_login'
+        this.formRefs.username = React.createRef()
+        this.formRefs.password = React.createRef()
     }
 
     componentDidMount() {
@@ -40,7 +42,7 @@ class UserLogin extends LoginForm {
                                     className="kp-input"
                                     autoComplete="on"
                                     type="text"
-                                    ref="username"
+                                    ref={this.formRefs.username}
                                     placeholder="Username"
                                     required
                                     autoFocus={!this.state.error}
@@ -56,7 +58,7 @@ class UserLogin extends LoginForm {
                                     id="kp-ul-password"
                                     className="kp-input"
                                     type="password"
-                                    ref="password"
+                                    ref={this.formRefs.password}
                                     placeholder="Password"
                                     required
                                     autoFocus={!!this.state.error}
