@@ -9,7 +9,7 @@
         "test:headed": "playwright test --headed --reporter=list",
         "dev": "./node_modules/.bin/browserify -t browserify-css -t babelify js/scripts/app.js -o public/scripts/bundle.js",
         "watch": "./node_modules/.bin/watchify -t browserify-css -t babelify js/scripts/app.js -o public/scripts/bundle.js",
-        "build": "NODE_ENV=production ./node_modules/.bin/browserify -t browserify-css -t babelify -p [ uglifyify --no-sourcemap ] js/scripts/app.js | terser --compress --mangle > public/scripts/bundle.js"
+        "build": "NODE_ENV=production ./node_modules/.bin/browserify -t browserify-css -t babelify js/scripts/app.js | terser --compress --mangle > public/scripts/bundle.js"
     },
     "repository": {
         "type": "git",
@@ -24,16 +24,15 @@
         "url": "https://github.com/lixmal/keepass4web-rs/issues"
     },
     "devDependencies": {
-        "@babel/core": "^7.29.6",
-        "@babel/preset-env": "^7.28.5",
-        "@babel/preset-react": "^7.28.5",
-        "@playwright/test": "^1.56.1",
+        "@babel/core": "^7.29.7",
+        "@babel/preset-env": "^7.29.7",
+        "@babel/preset-react": "^7.29.7",
+        "@playwright/test": "^1.62.1",
         "babelify": "^10.0.0",
         "browserify": "^17.0.1",
         "browserify-css": "^0.15.0",
         "core-js": "^3.50.0",
-        "terser": "^5.44.1",
-        "uglifyify": "^5.0.2",
+        "terser": "^5.51.2",
         "watchify": "^4.0.0"
     },
     "dependencies": {
