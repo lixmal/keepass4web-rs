@@ -26,11 +26,12 @@ postcard = { version = "1.1.3", features = ["use-std"] }
 env_logger = { version = "0.11.11", features = [] }
 log = "0.4.34"
 rand = "0.8.8"
-keepass = { git = "https://github.com/lixmal/keepass-rs", features = ["serialization", "save_kdbx4"] }
+keepass = { git = "https://github.com/lixmal/keepass-rs", rev = "870dc12db516938ae595256ddf7205b12c77aeda", features = ["serialization", "save_kdbx4"] }
 zeroize = { version = "1.9.0", features = ["derive", "std"] }
 secrecy = "0.8.0"
 uuid = { version = "1.26.0", features = ["v4"] }
 regex = "1.13.1"
+chrono = "0.4.45"
 mime = "0.3.17"
 aes-gcm = { version = "0.10.3", features = ["zeroize", "std"] }
 constant_time_eq = "0.3.1"
