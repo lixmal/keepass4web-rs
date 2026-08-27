@@ -17,6 +17,14 @@ class TreeNode extends React.Component {
         e.stopPropagation()
     }
 
+    // a row is reachable by keyboard, so it answers to the keys a button would
+    selectOnKey(node, e) {
+        if (e.key !== 'Enter' && e.key !== ' ') return
+
+        e.preventDefault()
+        this.select(node, e)
+    }
+
     select(node, e) {
         e.stopPropagation()
         const { nodeClick } = this.props.options
@@ -79,7 +87,10 @@ class TreeNode extends React.Component {
                 <div
                     className="kp-tree-item"
                     data-testid="tree-node"
+                    role="button"
+                    tabIndex={0}
                     onClick={this.select.bind(this, node)}
+                    onKeyDown={this.selectOnKey.bind(this, node)}
                 >
                     {expandIcon}
                     {nodeIcon}

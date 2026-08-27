@@ -957,3 +957,17 @@ textarea.kp-input {
   margin-bottom: 4px;
 }
 .kp-form-icon-row .kp-field { flex: 1; }
+
+/* out of sight but still in the focus order, unlike display: none */
+.kp-visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  border: 0;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  overflow: hidden;
+  white-space: nowrap;
+}

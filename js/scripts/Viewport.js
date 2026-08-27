@@ -226,9 +226,12 @@ class Viewport extends React.Component {
         KeePass4Web.fetch('get_groups', {
             method: 'GET',
             success: (data) => {
-                this.setState({ tree: data.groups })
-                if (data.last_selected)
-                    this.onGroupSelect({ id: data.last_selected })
+                // the selection reads the tree back out of the state, so it
+                // waits until the state holds it
+                this.setState({ tree: data.groups }, () => {
+                    if (data.last_selected)
+                        this.onGroupSelect({ id: data.last_selected })
+                })
             },
             error: KeePass4Web.error.bind(this),
         })

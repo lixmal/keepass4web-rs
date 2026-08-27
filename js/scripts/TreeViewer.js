@@ -43,7 +43,15 @@ class TreeViewer extends React.Component {
                     <div
                         className="kp-tree-item"
                         data-testid="tree-root"
+                        role="button"
+                        tabIndex={0}
                         onClick={() => this.props.nodeClick && this.props.nodeClick(root)}
+                        onKeyDown={(event) => {
+                            if (event.key !== 'Enter' && event.key !== ' ') return
+
+                            event.preventDefault()
+                            if (this.props.nodeClick) this.props.nodeClick(root)
+                        }}
                     >
                         <span style={{ width: 12, flexShrink: 0 }}/>
                         <IconFolderRoot size={15}/>
