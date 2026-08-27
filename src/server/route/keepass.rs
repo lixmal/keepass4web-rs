@@ -220,6 +220,9 @@ async fn get_file(session: Session, config: Data<Config>, db_cache: Data<DbCache
     let filename = params.filename.replace(['"', '\\', '\r', '\n'], "_");
 
     HttpResponse::Ok()
+        // the bytes come out of the user's vault, so no cache along the way
+        // gets to keep a copy
+        .append_header(("Cache-Control", "no-store"))
         .append_header(("Content-Disposition", format!("attachment; filename=\"{}\"", filename)))
         .content_type("application/octet-stream")
         .body(data)

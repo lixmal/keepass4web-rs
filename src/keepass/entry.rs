@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use chrono::NaiveDateTime;
-use keepass::db::EntryRef;
+use keepass::db::{Entry as KpEntry, EntryRef};
 use regex::Regex;
 use serde::Serialize;
 use uuid::Uuid;
@@ -73,6 +73,17 @@ fn stamp(time: &Option<NaiveDateTime>) -> Option<String> {
     time.map(|t| t.and_utc().to_rfc3339())
 }
 
+// A field's value, but only when it is not protected. Any field can be marked
+// protected, including the ones an entry normally shows, and a protected value
+// is the user's to ask for by name rather than something to hand out with the
+// entry. Entry::get would unprotect it for us, which is exactly what we do not
+// want here.
+fn unprotected(entry: &KpEntry, name: &str) -> Option<String> {
+    entry.fields.get(name)
+        .filter(|value| !value.is_protected())
+        .map(|value| value.get().clone())
+}
+
 impl From<&EntryRef<'_>> for Entry {
     fn from(entry: &EntryRef<'_>) -> Self {
         let mut strings: HashMap<String, Option<String>> = Default::default();
@@ -95,10 +106,10 @@ impl From<&EntryRef<'_>> for Entry {
         let history = entry.history.as_ref().map(|history| {
             history.get_entries().iter()
                 .map(|old| HistoryEntry {
-                    title: old.get_title().map(String::from),
-                    username: old.get_username().map(String::from),
-                    url: old.get_url().map(String::from),
-                    notes: old.get("Notes").map(String::from),
+                    title: unprotected(old, "Title"),
+                    username: unprotected(old, "UserName"),
+                    url: unprotected(old, "URL"),
+                    notes: unprotected(old, "Notes"),
                     modified: stamp(&old.times.last_modification),
                 })
                 .collect()
@@ -166,5 +177,43 @@ impl Entry {
         }
 
         false
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use keepass::db::{Database, Value};
+
+    use super::*;
+
+    // Any field can be marked protected, including the ones an entry normally
+    // shows. A previous version of one must not hand the value out with the
+    // entry when the current version would not.
+    #[test]
+    fn a_protected_field_stays_hidden_in_history() {
+        let mut db = Database::new();
+        let entry_id = {
+            let mut root = db.root_mut();
+            let mut entry = root.add_entry();
+            entry.set_unprotected("Title", "visible");
+            entry.set("Notes", Value::protected("a secret note"));
+            entry.id()
+        };
+
+        // an edit through a tracked reference keeps the old version in history
+        db.entry_mut(entry_id).unwrap().edit_tracking(|entry| {
+            entry.set_unprotected("Title", "still visible");
+        });
+
+        let entry = Entry::from(&db.entry(entry_id).unwrap());
+        let history = entry.history.expect("the edit should have been recorded");
+        assert_eq!(history.len(), 1, "expected one previous version");
+
+        assert_eq!(history[0].title.as_deref(), Some("visible"));
+        assert_eq!(history[0].notes, None, "a protected note must not be handed out");
+
+        // and the current version hides it the same way
+        assert_eq!(entry.notes, None);
+        assert!(entry.protected.unwrap().contains_key("Notes"));
     }
 }
