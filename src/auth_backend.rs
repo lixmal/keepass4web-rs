@@ -1,4 +1,5 @@
 use std::any::Any;
+use std::fmt::{Display, Formatter};
 
 use anyhow::{bail, Result};
 use async_trait::async_trait;
@@ -54,6 +55,26 @@ pub enum LogoutType {
     Redirect {
         url: Url,
     },
+}
+
+// A login fails either because the credentials were wrong or because the
+// backend could not answer, and the two want different treatment: the first is
+// the user's to correct, the second is the operator's, and telling a user their
+// password is wrong when the directory is unreachable sends them chasing the
+// wrong thing.
+#[derive(Debug, Clone)]
+pub struct InvalidCredentialsError;
+
+impl Display for InvalidCredentialsError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "username or password incorrect")
+    }
+}
+
+impl std::error::Error for InvalidCredentialsError {}
+
+pub fn is_invalid_credentials(err: &anyhow::Error) -> bool {
+    err.downcast_ref::<InvalidCredentialsError>().is_some()
 }
 
 #[async_trait]

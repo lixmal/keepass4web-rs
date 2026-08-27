@@ -8,7 +8,7 @@ use serde_json::json;
 
 use crate::{auth_backend, db_backend};
 use crate::auth::{BackendLogin, DbLogin, SESSION_KEY_USER, UserLogin};
-use crate::auth_backend::{AuthCache, SESSION_KEY_AUTH_STATE, UserInfo};
+use crate::auth_backend::{AuthCache, is_invalid_credentials, SESSION_KEY_AUTH_STATE, UserInfo};
 use crate::config::config::Config;
 use crate::keepass::db_cache::DbCache;
 use crate::keepass::keepass::KeePass;
@@ -83,9 +83,20 @@ async fn user_login(request: HttpRequest, session: Session, config: Data<Config>
     }
 
     let auth_backend = auth_backend::new(&config);
-    // TODO: differentiate between real error and login failed
     let user_info = match auth_backend.login(params.username.as_str(), params.password.as_str()).await {
         Ok(user_info) => user_info,
+        // a backend that could not answer is not a wrong password: it is logged
+        // as the fault it is, it does not count towards the attempts that lock
+        // an account out, and the user is not sent to check their password
+        Err(err) if !is_invalid_credentials(&err) => {
+            error!("user login from '{}': the auth backend failed: {:#}", params.username, err);
+            return HttpResponse::ServiceUnavailable().json(json!(
+                {
+                    "success": false,
+                    "message": "the authentication backend is unavailable",
+                }
+            ));
+        }
         Err(err) => {
             rate_limiter.failure(&rate_key).await;
             info!("user login from '{}': {}", params.username, err);
