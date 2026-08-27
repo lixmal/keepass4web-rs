@@ -1,8 +1,9 @@
-use anyhow::{anyhow, bail, Result};
+use anyhow::{anyhow, Result};
 use async_trait::async_trait;
 use ldap3::{drive, ldap_escape, LdapConnAsync, SearchEntry};
+use log::info;
 
-use crate::auth_backend::{AuthBackend, AuthCache, LoginType, UserInfo};
+use crate::auth_backend::{AuthBackend, AuthCache, InvalidCredentialsError, LoginType, UserInfo};
 use crate::config::config::Config;
 use crate::config::ldap;
 
@@ -56,16 +57,22 @@ impl AuthBackend for Ldap {
         // an empty password would result in an anonymous bind, which most ldap
         // servers report as success, bypassing the password check entirely
         if password.is_empty() {
-            bail!("empty password");
+            return Err(InvalidCredentialsError.into());
         }
 
-        let (conn, mut ldap) = LdapConnAsync::new(self.config.uri.as_str()).await?;
+        // reaching the directory and binding as the service account are the
+        // operator's side of this: they stay plain errors, so an outage or a
+        // wrong bind dn does not reach the user as a wrong password
+        let (conn, mut ldap) = LdapConnAsync::new(self.config.uri.as_str())
+            .await
+            .map_err(|err| anyhow!("failed to connect to '{}': {}", self.config.uri, err))?;
 
         drive!(conn);
         ldap.simple_bind(
             self.config.bind.as_str(),
             self.config.password.as_str(),
-        ).await?.success()?;
+        ).await?.success()
+            .map_err(|err| anyhow!("failed to bind as '{}': {}", self.config.bind, err))?;
 
         let mut attrs = vec![CN_ATTR, self.config.login_attribute.as_str()];
         if let Some(k) = &self.config.database_attribute {
@@ -85,7 +92,8 @@ impl AuthBackend for Ldap {
         ).await?.success()?;
 
         if results.is_empty() {
-            bail!("no users found with filter '{}'", filter);
+            info!("no users found with filter '{}'", filter);
+            return Err(InvalidCredentialsError.into());
         }
 
         let user = SearchEntry::construct(results[0].clone());
@@ -95,7 +103,8 @@ impl AuthBackend for Ldap {
         ldap.simple_bind(
             user.dn.as_str(),
             password,
-        ).await?.success()?;
+        ).await?.success()
+            .map_err(|_| InvalidCredentialsError)?;
         ldap.unbind().await?;
 
         let cn = get_attr_ci(&user.attrs, CN_ATTR)
