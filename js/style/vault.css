@@ -540,6 +540,8 @@ body:has(.kp-app) {
   display: flex; align-items: center; justify-content: center;
   color: var(--kp-primary); flex-shrink: 0;
 }
+/* the icon of an entry sits inside that square rather than filling it */
+.kp-detail-icon img { width: 24px; height: 24px; object-fit: contain; }
 .kp-detail-icon-info h4 { font-size: 14px; font-weight: 600; }
 .kp-detail-icon-info p { font-size: 12px; color: var(--kp-text-muted); margin-top: 1px; }
 .kp-detail-modified {

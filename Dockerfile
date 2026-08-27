@@ -9,7 +9,7 @@ WORKDIR /workspace
 COPY js js
 COPY public public
 COPY package*.json ./
-RUN npm install && cp node_modules/bootstrap/fonts/* public/fonts/ && npm run build
+RUN npm install && npm run build
 
 # Compile Rust on the native host platform, cross-compiling to $TARGETPLATFORM
 FROM --platform=$BUILDPLATFORM docker.io/rust:1-alpine AS build

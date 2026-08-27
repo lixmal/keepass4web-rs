@@ -15,9 +15,6 @@ function applyTheme(t) {
     localStorage.setItem('kp-theme', t)
 }
 
-window.$ = window.jQuery = require('jquery')
-require('bootstrap')
-
 class NavBar extends React.Component {
     constructor(props) {
         super(props)
