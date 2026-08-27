@@ -5,9 +5,20 @@ const ICON_COUNT = 69  // KeePass standard icons: 0–68
 
 function generatePassword(length = 20) {
     const charset = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*()-_=+[]{}|;:,.<>?'
-    const arr = new Uint8Array(length)
-    window.crypto.getRandomValues(arr)
-    return Array.from(arr).map(b => charset[b % charset.length]).join('')
+    // taking a byte modulo the alphabet would favour its first characters,
+    // since 256 is not a multiple of the alphabet length: draw again instead
+    const limit = Math.floor(256 / charset.length) * charset.length
+    const password = []
+
+    while (password.length < length) {
+        const bytes = new Uint8Array(length - password.length)
+        window.crypto.getRandomValues(bytes)
+        for (const byte of bytes) {
+            if (byte < limit) password.push(charset[byte % charset.length])
+        }
+    }
+
+    return password.join('')
 }
 
 function iconSrc(id) {
@@ -24,7 +35,7 @@ class EntryForm extends React.Component {
                 username: e.username || '',
                 password: '',
                 url:      e.url      || '',
-                notes:    '',
+                notes:    e.notes    || '',
                 icon:     e.icon     != null ? e.icon : null,
             },
             saving:       false,
@@ -43,7 +54,7 @@ class EntryForm extends React.Component {
                     username: e.username || '',
                     password: '',
                     url:      e.url      || '',
-                    notes:    '',
+                    notes:    e.notes    || '',
                     icon:     e.icon     != null ? e.icon : null,
                 },
                 saving: false,

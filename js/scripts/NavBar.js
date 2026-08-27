@@ -180,17 +180,6 @@ class NavBar extends React.Component {
                 </button>
 
                 <div className="kp-nav-actions">
-                    {this.props.onSaveDb && (
-                        <button
-                            className="kp-btn kp-btn-ghost"
-                            onClick={this.props.onSaveDb}
-                            title="Sync / refresh"
-                        >
-                            <IconSync size={14}/>
-                            Sync
-                        </button>
-                    )}
-
                     <div className={`kp-dropdown${this.state.dropdownOpen ? ' open' : ''}`}>
                         <button
                             className="kp-btn kp-btn-ghost"

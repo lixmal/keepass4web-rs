@@ -67,7 +67,7 @@ class DBLogin extends LoginForm {
                                     accept="*/*"
                                     ref="keyfile"
                                     onChange={this.handleFile}
-                                    style={{ display: 'none' }}
+                                    className="kp-visually-hidden"
                                 />
                                 <label htmlFor="kp-keyfile-input" className={`kp-file-label${fileName ? ' has-file' : ''}`}>
                                     <IconUpload size={13}/>
