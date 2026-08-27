@@ -311,7 +311,7 @@ async fn create_group(session: Session, config: Data<Config>, db_cache: Data<DbC
         return err;
     }
 
-    info!("create_group from '{}': {} under {}", username, params.title, params.parent_id);
+    info!("create_group from '{}': {} under {}", username, new_id, params.parent_id);
     HttpResponse::Ok().json(json!({ "success": true, "data": { "id": new_id } }))
 }
 
@@ -325,7 +325,7 @@ async fn rename_group(session: Session, config: Data<Config>, db_cache: Data<DbC
         return err;
     }
 
-    info!("rename_group from '{}': {} -> '{}'", username, params.id, params.title);
+    info!("rename_group from '{}': {}", username, params.id);
     HttpResponse::Ok().json(json!({ "success": true }))
 }
 

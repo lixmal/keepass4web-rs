@@ -279,6 +279,19 @@ fn get_user_info(session: &Session) -> Result<UserInfo, HttpResponse> {
 
 #[post("/close_db")]
 async fn close_db(session: Session, config: Data<Config>, db_cache: Data<DbCache>) -> impl Responder {
+    // a modification that is halfway through would otherwise store the database
+    // and its key again after this cleared them, leaving it open
+    let _guard = match db_cache.mutation_guard(&session).await {
+        Ok(guard) => guard,
+        Err(err) => {
+            error!("close db from '{}': {}", session.get_user_id(), err);
+            return HttpResponse::InternalServerError().json(json!({
+                "success": false,
+                "message": "failed to close db",
+            }));
+        }
+    };
+
     if let Err(err) = _close_db(&session, &config, &db_cache).await {
         return err;
     }
@@ -312,8 +325,12 @@ async fn logout(request: HttpRequest, session: Session, config: Data<Config>, db
         }
     };
 
-    // best effort, key expires anyway
-    let _ = _close_db(&session, &config, &db_cache).await;
+    // best effort, key expires anyway, but still after any modification in
+    // flight rather than in the middle of one
+    {
+        let _guard = db_cache.mutation_guard(&session).await;
+        let _ = _close_db(&session, &config, &db_cache).await;
+    }
 
     session.destroy();
 

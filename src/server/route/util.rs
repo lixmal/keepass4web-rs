@@ -173,6 +173,19 @@ pub(crate) async fn modify_db<F>(
 where
     F: FnOnce(&mut KeePass) -> anyhow::Result<()>,
 {
+    // held until this modification has been stored again, so a second one
+    // cannot start from the copy this one is about to replace
+    let _guard = match db_cache.mutation_guard(session).await {
+        Ok(guard) => guard,
+        Err(err) => {
+            error!("failed to take the database lock: {}", err);
+            return Err(HttpResponse::InternalServerError().json(json!({
+                "success": false,
+                "message": "failed to modify database",
+            })));
+        }
+    };
+
     let mut keepass = get_db(session, config, db_cache).await?;
 
     if let Err(err) = modify(&mut keepass) {
