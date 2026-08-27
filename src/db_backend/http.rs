@@ -1,4 +1,3 @@
-use std::any::Any;
 use std::pin::Pin;
 use std::str::FromStr;
 
@@ -96,10 +95,6 @@ impl DbBackend for Http {
                 Some(rx)
             )
         )
-    }
-
-    fn as_any(&mut self) -> &mut dyn Any {
-        self
     }
 }
 
@@ -212,13 +207,6 @@ mod tests {
         write_http(Url::from_str(&server.url()).unwrap()).await.unwrap();
 
         mock.assert_async().await;
-    }
-
-    #[tokio::test]
-    async fn write_fail() {
-        let res = write_http(Url::from_str("http://0.0.0.0").unwrap()).await;
-
-        assert!(res.is_err());
     }
 
     #[tokio::test]

@@ -350,12 +350,8 @@ class Viewport extends React.Component {
                             />
                         )}
                         {!detailOpen && (
-                            <div style={{
-                                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                height: '100%', color: 'var(--kp-text-muted)', fontSize: 13,
-                                flexDirection: 'column', gap: 8,
-                            }}>
-                                <span style={{ fontSize: 32 }}>🔑</span>
+                            <div className="kp-detail-empty">
+                                <span>🔑</span>
                                 Select an entry to view details
                             </div>
                         )}

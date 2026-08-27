@@ -1,4 +1,3 @@
-use std::any::Any;
 use std::pin::Pin;
 
 use actix_web::web::Form;
@@ -27,7 +26,6 @@ pub trait DbBackend {
     // return None if the db backend doesn't return key files or is not configured to do so
     async fn get_key_read(&self, user_info: &UserInfo) -> Option<Result<Pin<Box<dyn AsyncRead + '_>>>>;
     async fn get_db_write(&mut self, user_info: &UserInfo) -> Result<(Pin<Box<dyn AsyncWrite + '_>>, Option<Receiver<Result<()>>>)>;
-    fn as_any(&mut self) -> &mut dyn Any;
     fn validate_config(&self) -> Result<()> { Ok(()) }
 }
 

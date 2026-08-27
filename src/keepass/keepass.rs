@@ -164,30 +164,6 @@ impl KeePass {
         Ok(KeePass { config: config.clone(), db })
     }
 
-    #[allow(dead_code)]
-    pub async fn to_backend(self, db_backend: &mut dyn DbBackend, params: &DbLogin, user_info: &UserInfo) -> Result<()> {
-        let key = Self::db_key_from_params(db_backend, params, user_info).await?;
-
-        let mut buf: Vec<u8> = vec![];
-        let (result, mut buf) = tokio::task::spawn_blocking(move || {
-            (self.db.save(&mut buf, key), buf)
-        }).await?;
-        result?;
-
-        let (mut writer, rx) = db_backend.get_db_write(user_info).await?;
-        writer.write_all(&buf).await?;
-        buf.zeroize();
-
-        // close our side to signal end of data
-        // otherwise we could get a deadlock awaiting the channel
-        writer.shutdown().await?;
-        if let Some(rx) = rx {
-            rx.await??;
-        }
-
-        Ok(())
-    }
-
     pub(crate) async fn db_key_from_params_pub(db_backend: &dyn DbBackend, params: &DbLogin, user_info: &UserInfo) -> Result<DatabaseKey> {
         Self::db_key_from_params(db_backend, params, user_info).await
     }
@@ -621,11 +597,13 @@ impl KeePass {
 mod tests {
     use tokio::fs;
 
-    use crate::config::backend::DbBackend;
-    use crate::db_backend;
     use crate::db_backend::test::Test;
 
     use super::*;
+
+    fn db_key() -> DatabaseKey {
+        DatabaseKey::new().with_password("test")
+    }
 
     #[tokio::test]
     async fn database_roundtrip() {
@@ -633,15 +611,13 @@ mod tests {
             password: Some("test".to_string()),
             key: None,
         };
-        let mut config = Config::default();
-        config.db_backend = DbBackend::Test;
+        let config = Config::default();
 
-        let mut db_backend = db_backend::new(&config);
-        let test_backend: &mut Test = db_backend.as_any().downcast_mut().unwrap();
-        test_backend.buf.extend_from_slice(&fs::read("tests/test.kdbx").await.unwrap());
+        let mut backend = Test::new();
+        backend.buf = fs::read("tests/test.kdbx").await.unwrap();
 
         let user_info = UserInfo::default();
-        let keepass = KeePass::from_backend(&config, test_backend, &params, &user_info).await.unwrap();
+        let keepass = KeePass::from_backend(&config, &mut backend, &params, &user_info).await.unwrap();
 
         let (mut key, enc) = keepass.to_enc().unwrap();
 
@@ -652,13 +628,33 @@ mod tests {
         let dec = KeePass::from_enc(&config, ret_key, enc).unwrap();
 
         // can't clone, so we read in another one
-        let keepass = KeePass::from_backend(&config, test_backend, &params, &user_info).await.unwrap();
+        let keepass = KeePass::from_backend(&config, &mut backend, &params, &user_info).await.unwrap();
 
         assert_eq!(keepass.db, dec.db);
+    }
 
-        test_backend.buf = Vec::new();
-        keepass.to_backend(test_backend, &params, &user_info).await.unwrap();
+    // saving cannot carry file attachments over yet, so it has to refuse
+    // rather than write a database that silently lost them
+    #[tokio::test]
+    async fn saving_a_database_with_attachments_is_refused() {
+        let params = DbLogin {
+            password: Some("test".to_string()),
+            key: None,
+        };
+        let config = Config::default();
+        let user_info = UserInfo::default();
 
-        // TODO: compare KeePass::to_backend result
+        let mut backend = Test::new();
+        backend.buf = fs::read("tests/test.kdbx").await.unwrap();
+
+        let keepass = KeePass::from_backend(&config, &mut backend, &params, &user_info).await.unwrap();
+        assert!(keepass.attachment_count() > 0, "the fixture is expected to carry an attachment");
+
+        let before = backend.buf.clone();
+        let err = keepass.to_backend_with_key(&mut backend, db_key(), &user_info).await
+            .err().expect("saving must refuse");
+
+        assert!(err.to_string().contains("attachment"), "{:#}", err);
+        assert_eq!(backend.buf, before, "the database must be left untouched");
     }
 }
