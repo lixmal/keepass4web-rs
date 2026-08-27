@@ -971,3 +971,25 @@ textarea.kp-input {
   overflow: hidden;
   white-space: nowrap;
 }
+
+/* a custom field of an entry: name, value, whether it is protected */
+.kp-form-field-row {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  margin-bottom: 6px;
+}
+
+.kp-form-field-row .kp-input {
+  flex: 1;
+  min-width: 0;
+}
+
+.kp-form-field-protected {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin: 0;
+  color: var(--kp-text-muted);
+  cursor: pointer;
+}

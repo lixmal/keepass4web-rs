@@ -1,5 +1,5 @@
 import React from 'react'
-import { IconEye, IconEyeOff, IconRefresh, IconSave } from './Icons'
+import { IconEye, IconEyeOff, IconLock, IconPlus, IconRefresh, IconSave, IconTrash } from './Icons'
 
 const ICON_COUNT = 69  // KeePass standard icons: 0–68
 
@@ -25,6 +25,20 @@ function iconSrc(id) {
     return `assets/img/icons/${id}.png`
 }
 
+// The entry lists its custom fields with the protected ones blanked out, since
+// their values are only handed over when they are asked for one at a time. An
+// empty protected field left as it is keeps the value it has on the server.
+function customFieldsOf(entry) {
+    const strings = (entry && entry.strings) || {}
+    const protectedFields = (entry && entry.protected) || {}
+
+    return Object.keys(strings).map(name => ({
+        name,
+        value: strings[name] == null ? '' : strings[name],
+        protected: Object.prototype.hasOwnProperty.call(protectedFields, name),
+    }))
+}
+
 class EntryForm extends React.Component {
     constructor(props) {
         super(props)
@@ -37,6 +51,8 @@ class EntryForm extends React.Component {
                 url:      e.url      || '',
                 notes:    e.notes    || '',
                 icon:     e.icon     != null ? e.icon : null,
+                tags:     (e.tags || []).join(', '),
+                fields:   customFieldsOf(e),
             },
             saving:       false,
             showPassword: false,
@@ -56,6 +72,8 @@ class EntryForm extends React.Component {
                     url:      e.url      || '',
                     notes:    e.notes    || '',
                     icon:     e.icon     != null ? e.icon : null,
+                    tags:     (e.tags || []).join(', '),
+                    fields:   customFieldsOf(e),
                 },
                 saving: false,
                 showPassword: false,
@@ -94,6 +112,30 @@ class EntryForm extends React.Component {
         this.setState(prev => ({ form: { ...prev.form, [field]: val } }))
     }
 
+    setField(index, key, e) {
+        const val = key === 'protected' ? e.target.checked : e.target.value
+        this.setState(prev => ({
+            form: {
+                ...prev.form,
+                fields: prev.form.fields.map((field, i) => (
+                    i === index ? { ...field, [key]: val } : field
+                )),
+            },
+        }))
+    }
+
+    addField() {
+        this.setState(prev => ({
+            form: { ...prev.form, fields: [...prev.form.fields, { name: '', value: '', protected: false }] },
+        }))
+    }
+
+    removeField(index) {
+        this.setState(prev => ({
+            form: { ...prev.form, fields: prev.form.fields.filter((_, i) => i !== index) },
+        }))
+    }
+
     genPassword() {
         this.setState(prev => ({
             form: { ...prev.form, password: generatePassword() },
@@ -111,6 +153,11 @@ class EntryForm extends React.Component {
 
         const payload = { ...form }
         if (payload.icon === null) delete payload.icon
+        // a form encoded body cannot carry a list, so the custom fields travel
+        // as json, and a field without a name is one the user never filled in
+        payload.fields = JSON.stringify(
+            form.fields.filter(field => field.name.trim() !== ''),
+        )
 
         if (mode === 'new') {
             KeePass4Web.fetch('entry', {
@@ -275,6 +322,66 @@ class EntryForm extends React.Component {
                             value={form.notes}
                             onChange={this.set.bind(this, 'notes')}
                         />
+                    </div>
+
+                    <div className="kp-field">
+                        <label htmlFor="kp-f-tags">Tags</label>
+                        <input
+                            className="kp-input" id="kp-f-tags"
+                            type="text" placeholder="Comma separated"
+                            value={form.tags}
+                            onChange={this.set.bind(this, 'tags')}
+                        />
+                    </div>
+
+                    <div className="kp-field">
+                        <label>Custom fields</label>
+                        {form.fields.map((field, i) => (
+                            <div className="kp-form-field-row" key={i} data-testid="custom-field-row">
+                                <input
+                                    className="kp-input"
+                                    type="text" placeholder="Name"
+                                    data-testid="custom-field-name"
+                                    value={field.name}
+                                    onChange={this.setField.bind(this, i, 'name')}
+                                />
+                                <input
+                                    className="kp-input"
+                                    type={field.protected ? 'password' : 'text'}
+                                    placeholder={field.protected && field.value === '' ? 'Unchanged' : 'Value'}
+                                    data-testid="custom-field-value"
+                                    value={field.value}
+                                    onChange={this.setField.bind(this, i, 'value')}
+                                />
+                                <label className="kp-form-field-protected" title="Store the value protected">
+                                    <input
+                                        type="checkbox"
+                                        data-testid="custom-field-protected"
+                                        checked={field.protected}
+                                        onChange={this.setField.bind(this, i, 'protected')}
+                                    />
+                                    <IconLock size={13}/>
+                                </label>
+                                <button
+                                    type="button"
+                                    className="kp-btn kp-btn-ghost"
+                                    title="Remove this field"
+                                    data-testid="custom-field-remove"
+                                    onClick={this.removeField.bind(this, i)}
+                                >
+                                    <IconTrash size={13}/>
+                                </button>
+                            </div>
+                        ))}
+                        <button
+                            type="button"
+                            className="kp-btn kp-btn-outline"
+                            data-testid="custom-field-add"
+                            onClick={this.addField.bind(this)}
+                        >
+                            <IconPlus size={13}/>
+                            Add field
+                        </button>
                     </div>
 
                     <div className="kp-form-actions">
