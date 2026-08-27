@@ -1,139 +1,46 @@
-@import url('node_modules/bootstrap/dist/css/bootstrap.min.css');
 @import url('./vault.css');
 
+/* What the vault does not style: the pages around it and the busy state they
+   show while a request is in flight. The rest of the interface is in
+   vault.css, which brings its own reset and palette. */
+
+*,
+*::before,
+*::after {
+    box-sizing: border-box;
+}
+
 body {
-    background-color: #ddd;
+    margin: 0;
+    background: var(--kp-bg);
+    color: var(--kp-text);
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
+    font-size: 14px;
+    line-height: 1.5;
 }
 
-.kp-login {
-    margin-top: 65px !important;
-    padding: 15px;
-    width: auto;
-    height: auto;
-    min-height: 200px;
-    min-width: 320px;
-    max-width: 400px;
-    background-color: #f3f3f3;
+/* the interface styles its own links and sizes its own icons, which the
+   framework that used to be here reset for it */
+a {
+    text-decoration: none;
+}
+
+a:hover,
+a:focus-visible {
+    text-decoration: underline;
+}
+
+img {
+    max-width: 100%;
+    vertical-align: middle;
+}
+
+/* the login pages centre their card in this */
+.container {
+    width: 100%;
+    max-width: 1140px;
     margin: 0 auto;
-    border-radius: 9px;
-    border: 1px solid #c5c5c5;
-    text-align: center;
-}
-
-.login-inner {
-    margin: 0 auto;
-    max-width: 380px;
-    width: auto;
-}
-
-.login > h4 {
-    font-size: 20px;
-    margin-left: 5px;
-    font-weight: 600;
-}
-
-.user {
-    margin-bottom: 5px;
-}
-
-.password {
-    margin-bottom: 15px;
-}
-
-.submit {
-    margin-top: 5px;
-}
-
-.login-error {
-    margin-top: 15px;
-    animation: blinker 1s linear;
-    margin-bottom: 0;
-}
-
-@keyframes blinker {
-    50% {
-        opacity: 0.0;
-    }
-}
-
-.panel-body {
-    background-color: #EEEEEE;
-}
-
-/*
-** leave more space on mobile devices,
-** showing more letters of the label
-*/
-@media screen and (max-width: 767px) {
-    .panel-body {
-        padding-left: 5px;
-        padding-right: 5px;
-    }
-}
-
-.kp-files {
-    text-align: center;
-}
-
-.kp-fields {
-    text-align: center;
-}
-
-.backend-icon {
-    height: auto;
-    width: auto;
-    max-height: 25px;
-}
-
-.kp-entry-label {
-    width: 21%;
-    max-width: 120px;
-}
-
-.kp-entry-value {
-    width: 69%;
-}
-
-.kp-entry-buttons {
-    width: 91px;
-    max-width: 91px;
-}
-
-.kp-wrap {
-    text-overflow: ellipsis;
-    overflow: hidden;
-    white-space: nowrap;
-}
-
-.kp-wrap:hover {
-    text-overflow: clip;
-    white-space: pre-wrap;
-    word-break: break-all;
-}
-
-.kp-wrap:active {
-    text-overflow: clip;
-    white-space: pre-wrap;
-    word-break: break-all;
-}
-
-.kp-wrap-comment {
-    white-space: pre-wrap;
-}
-
-.kp-table {
-    table-layout: fixed;
-}
-
-.kp-icon {
-    height: auto;
-    width: auto;
-    max-width: 16px;
-    margin-right: 0.25em;
-}
-
-.dir-tree {
-    margin-bottom: 20px;
+    padding: 0 15px;
 }
 
 .loading-mask {
@@ -148,15 +55,6 @@ body {
     bottom: 0;
     left: 0;
     background-color: rgba(0, 0, 0, 0.25);
-}
-
-@keyframes spin {
-    from {
-        transform: rotate(0deg);
-    }
-    to {
-        transform: rotate(359deg);
-    }
 }
 
 .loading-mask::after {
@@ -175,43 +73,11 @@ body {
     z-index: 2000;
 }
 
-.treeview-header {
-    cursor: pointer;
+@keyframes spin {
+    from {
+        transform: rotate(0);
+    }
+    to {
+        transform: rotate(360deg);
+    }
 }
-
-.treeview-header:hover {
-    background-color: #F9F9F9;
-}
-
-.treeview-body {
-    background-color: #EEEEEE;
-}
-
-.treeview-body .list-group-item {
-    cursor: pointer;
-    padding: 3px 10px;
-    background-color: #EEEEEE;
-}
-
-.treeview-body .list-group-item:hover {
-    background-color: #F5F5F5;
-}
-
-.treeview-body span.indent {
-    margin-left: 10px;
-    margin-right: 10px;
-}
-
-.treeview-body img {
-    margin-left: 10px;
-}
-
-.groupview-body tr {
-    cursor: pointer;
-}
-
-.glyphicon-none:before {
-    content: "\2122";
-    color: transparent !important;
-}
-

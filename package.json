@@ -7,9 +7,9 @@
         "test": "playwright test --reporter=list",
         "test:ui": "playwright test --ui",
         "test:headed": "playwright test --headed --reporter=list",
-        "dev": "./node_modules/.bin/browserify -t browserify-css -t babelify js/scripts/app.js -o public/scripts/bundle.js; sed -i 's/node_modules\\/bootstrap\\/dist/assets/g' public/scripts/bundle.js",
-        "watch": "./node_modules/.bin/watchify -t browserify-css -t babelify js/scripts/app.js -o public/scripts/bundle.js & sed -i 's/node_modules\\/bootstrap\\/dist/assets/g' public/scripts/bundle.js",
-        "build": "NODE_ENV=production ./node_modules/.bin/browserify -t browserify-css -t babelify -p [ uglifyify --no-sourcemap ] js/scripts/app.js | terser --compress --mangle > public/scripts/bundle.js; sed -i 's/node_modules\\/bootstrap\\/dist/assets/g' public/scripts/bundle.js"
+        "dev": "./node_modules/.bin/browserify -t browserify-css -t babelify js/scripts/app.js -o public/scripts/bundle.js",
+        "watch": "./node_modules/.bin/watchify -t browserify-css -t babelify js/scripts/app.js -o public/scripts/bundle.js",
+        "build": "NODE_ENV=production ./node_modules/.bin/browserify -t browserify-css -t babelify -p [ uglifyify --no-sourcemap ] js/scripts/app.js | terser --compress --mangle > public/scripts/bundle.js"
     },
     "repository": {
         "type": "git",
@@ -37,9 +37,7 @@
         "watchify": "^4.0.0"
     },
     "dependencies": {
-        "bootstrap": "^3.4.1",
         "classnames": "^2.5.1",
-        "jquery": "^3.7.1",
         "react": "^19.2.8",
         "react-dom": "^19.2.8",
         "react-router-dom": "^6.30.6"
