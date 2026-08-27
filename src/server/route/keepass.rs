@@ -9,7 +9,7 @@ use uuid::Uuid;
 
 use crate::config::config::Config;
 use crate::keepass::db_cache::DbCache;
-use crate::keepass::keepass::{File, Id, NotFoundError, Protected, SearchTerm};
+use crate::keepass::keepass::{CustomField, File, Id, NotFoundError, Protected, SearchTerm};
 use crate::server::route::util;
 use crate::session::AuthSession;
 
@@ -22,6 +22,10 @@ struct NewEntry {
     url: String,
     notes: String,
     icon: Option<usize>,
+    #[serde(default)]
+    tags: String,
+    #[serde(default)]
+    fields: String,
 }
 
 #[derive(Deserialize)]
@@ -33,6 +37,29 @@ struct UpdateEntry {
     url: String,
     notes: String,
     icon: Option<usize>,
+    #[serde(default)]
+    tags: String,
+    #[serde(default)]
+    fields: String,
+}
+
+// tags arrive as one comma separated field, the way the entry shows them
+fn parse_tags(tags: &str) -> Vec<String> {
+    tags.split(',')
+        .map(|tag| tag.trim())
+        .filter(|tag| !tag.is_empty())
+        .map(|tag| tag.to_string())
+        .collect()
+}
+
+// the custom fields of an entry are a list, which a form encoded body cannot
+// carry on its own, so they travel as json in one field
+fn parse_custom_fields(fields: &str) -> Result<Vec<CustomField>, serde_json::Error> {
+    if fields.trim().is_empty() {
+        return Ok(vec![]);
+    }
+
+    serde_json::from_str(fields)
 }
 
 #[derive(Deserialize)]
@@ -258,6 +285,18 @@ async fn create_entry(session: Session, config: Data<Config>, db_cache: Data<DbC
     let username = session.get_user_id();
     let mut new_id = Uuid::nil();
 
+    let tags = parse_tags(&params.tags);
+    let custom_fields = match parse_custom_fields(&params.fields) {
+        Ok(fields) => fields,
+        Err(err) => {
+            info!("create_entry from '{}': {}", username, err);
+            return HttpResponse::BadRequest().json(json!({
+                "success": false,
+                "message": "failed to read the custom fields",
+            }));
+        }
+    };
+
     if let Err(err) = util::modify_db(&session, &config, &db_cache, |kp| {
         new_id = kp.create_entry(
             &params.group_id,
@@ -267,6 +306,8 @@ async fn create_entry(session: Session, config: Data<Config>, db_cache: Data<DbC
             &params.url,
             &params.notes,
             params.icon,
+            &tags,
+            &custom_fields,
         )?;
         Ok(())
     }).await {
@@ -281,6 +322,18 @@ async fn create_entry(session: Session, config: Data<Config>, db_cache: Data<DbC
 async fn update_entry(session: Session, config: Data<Config>, db_cache: Data<DbCache>, params: web::Form<UpdateEntry>) -> impl Responder {
     let username = session.get_user_id();
 
+    let tags = parse_tags(&params.tags);
+    let custom_fields = match parse_custom_fields(&params.fields) {
+        Ok(fields) => fields,
+        Err(err) => {
+            info!("update_entry from '{}': {}", username, err);
+            return HttpResponse::BadRequest().json(json!({
+                "success": false,
+                "message": "failed to read the custom fields",
+            }));
+        }
+    };
+
     if let Err(err) = util::modify_db(&session, &config, &db_cache, |kp| {
         kp.update_entry(
             &params.id,
@@ -290,6 +343,8 @@ async fn update_entry(session: Session, config: Data<Config>, db_cache: Data<DbC
             &params.url,
             &params.notes,
             params.icon,
+            &tags,
+            &custom_fields,
         )
     }).await {
         return err;

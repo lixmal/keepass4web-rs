@@ -40,6 +40,21 @@ impl std::fmt::Display for NotFoundError {
 
 impl std::error::Error for NotFoundError {}
 
+// the fields the format defines: everything else on an entry is a custom field
+// the user added and is theirs to name
+const STANDARD_FIELDS: [&str; 5] = ["Title", "UserName", "Password", "URL", "Notes"];
+
+// a field the user added to an entry, protected ones hidden from the client
+// until they ask for them
+#[derive(Deserialize)]
+pub struct CustomField {
+    pub name: String,
+    #[serde(default)]
+    pub value: String,
+    #[serde(default)]
+    pub protected: bool,
+}
+
 #[derive(Deserialize)]
 pub struct Id {
     pub id: Uuid,
@@ -213,6 +228,8 @@ impl KeePass {
         url: &str,
         notes: &str,
         icon: Option<usize>,
+        tags: &[String],
+        custom_fields: &[CustomField],
     ) -> Result<Uuid> {
         let group = Self::find_group_by_id_mut(&mut self.db.root, group_id)
             .ok_or(NotFoundError("group"))?;
@@ -226,6 +243,8 @@ impl KeePass {
         entry.fields.insert("URL".to_string(), Value::Unprotected(url.to_string()));
         entry.fields.insert("Notes".to_string(), Value::Unprotected(notes.to_string()));
         entry.icon_id = icon;
+        entry.tags = tags.to_vec();
+        Self::apply_custom_fields(&mut entry, custom_fields);
 
         let uuid = entry.uuid;
         group.add_child(entry);
@@ -241,6 +260,8 @@ impl KeePass {
         url: &str,
         notes: &str,
         icon: Option<usize>,
+        tags: &[String],
+        custom_fields: &[CustomField],
     ) -> Result<()> {
         let entry = Self::find_entry_by_id_mut(&mut self.db.root, entry_id)
             .ok_or(NotFoundError("entry"))?;
@@ -256,7 +277,37 @@ impl KeePass {
             entry.icon_id = Some(id);
         }
 
+        entry.tags = tags.to_vec();
+        Self::apply_custom_fields(entry, custom_fields);
+
         Ok(())
+    }
+
+    // The standard fields of an entry are named by the format, everything else
+    // the user added is a custom field and is replaced wholesale by what the
+    // request carries. A protected field sent without a value keeps the value
+    // it has, the same way an empty password leaves the password alone: the
+    // client never received it to send back.
+    fn apply_custom_fields(entry: &mut keepass::db::Entry, custom_fields: &[CustomField]) {
+        let kept: Vec<(String, Value)> = custom_fields.iter()
+            .map(|field| {
+                let value = match (field.protected, field.value.is_empty()) {
+                    (true, true) => match entry.fields.get(&field.name) {
+                        Some(Value::Protected(existing)) => Value::Protected(existing.unsecure().into()),
+                        _ => Value::Protected(field.value.as_bytes().into()),
+                    },
+                    (true, false) => Value::Protected(field.value.as_bytes().into()),
+                    (false, _) => Value::Unprotected(field.value.clone()),
+                };
+
+                (field.name.clone(), value)
+            })
+            .collect();
+
+        entry.fields.retain(|name, _| STANDARD_FIELDS.contains(&name.as_str()));
+        for (name, value) in kept {
+            entry.fields.insert(name, value);
+        }
     }
 
     pub fn create_group(&mut self, parent_id: &Uuid, name: &str) -> Result<Uuid> {
@@ -295,7 +346,23 @@ impl KeePass {
         Ok(())
     }
 
+    // The parser drops the reference an entry holds to a file attached to it,
+    // and writing the database back therefore leaves every attachment in it
+    // orphaned: the bytes stay in the file, nothing points at them any more and
+    // no client shows them again. Refusing to write is the only way to keep
+    // them until the underlying library carries the reference through.
+    pub fn attachment_count(&self) -> usize {
+        self.db.header_attachments.len()
+    }
+
     pub async fn to_backend_with_key(self, db_backend: &mut dyn DbBackend, db_key: DatabaseKey, user_info: &UserInfo) -> Result<()> {
+        if self.attachment_count() > 0 {
+            bail!(
+                "the database has {} file attachment(s), which saving would leave orphaned",
+                self.attachment_count(),
+            );
+        }
+
         let mut buf: Vec<u8> = vec![];
         let (result, mut buf) = tokio::task::spawn_blocking(move || {
             let r = self.db.save(&mut buf, db_key);
