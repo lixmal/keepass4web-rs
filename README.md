@@ -9,6 +9,7 @@
   - [CONFIGURATION](#configuration)
   - [DEPLOYMENT](#deployment)
     - [Container](#container)
+    - [Docker Compose](#docker-compose)
     - [Classic](#classic)
   - [BACKENDS](#backends)
     - [Authentication Backends](#authentication-backends)
@@ -74,7 +75,34 @@ The minified, bundled file will be written to public/scripts/bundle.js
 
 ## CONFIGURATION
 
-- See `config.yml`
+- See `config.yml`, and [config.example.yml](config.example.yml) for every option with its comment
+
+Any setting can be given as an environment variable instead, for deployments that keep the
+configuration and the secrets apart. Prefix the name of the setting with `KEEPASS4WEB_`, and step into
+a section with two underscores — one underscore is part of a name, two are a level:
+
+```bash
+KEEPASS4WEB_PORT=8080
+KEEPASS4WEB_DB_SESSION_TIMEOUT='45 minutes'
+KEEPASS4WEB_AUTH_BACKEND=LDAP
+KEEPASS4WEB_LDAP__BASE_DN='ou=users,dc=example,dc=org'
+KEEPASS4WEB_LDAP__PASSWORD='...'
+KEEPASS4WEB_SEARCH__FIELDS='[title, username, url]'
+```
+
+A variable replaces whatever the file said, and the file is optional: with no `config.yml` present and
+no `--config` given, the environment and the built-in defaults are the whole configuration. Asking for
+a file that is not there is still an error.
+
+Values are taken literally, so a secret of `12345`, `yes` or `[redacted]` stays that text rather than
+being read as a number, a boolean or a list. The settings that are lists accept either the YAML form
+or the items separated by commas:
+
+```bash
+KEEPASS4WEB_SEARCH__FIELDS='[title, username, url]'
+KEEPASS4WEB_SEARCH__FIELDS='title, username, url'
+KEEPASS4WEB_OIDC__SCOPES='profile'
+```
 
 ## DEPLOYMENT
 

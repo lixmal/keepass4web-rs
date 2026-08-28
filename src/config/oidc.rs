@@ -15,7 +15,9 @@ pub struct Oidc {
     pub discovery_url: Option<Url>,
     pub client_id: String,
     pub client_secret: String,
+    #[serde(deserialize_with = "crate::config::env::list")]
     pub scopes: Vec<String>,
+    #[serde(deserialize_with = "crate::config::env::scalar")]
     pub save_id_token: bool,
 }
 

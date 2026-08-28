@@ -18,8 +18,10 @@ const CONFIG_FILE: &str = "config.yml";
 #[derive(Parser)]
 #[command(author, version, about)]
 struct Args {
-    #[arg(short, long, default_value = CONFIG_FILE)]
-    config: std::path::PathBuf,
+    /// path to the configuration file; defaults to config.yml, which may be
+    /// absent when everything is supplied through the environment
+    #[arg(short, long)]
+    config: Option<std::path::PathBuf>,
     /// probe /health of a running instance and exit (for container healthchecks)
     #[arg(long)]
     health_check: bool,
@@ -28,7 +30,7 @@ struct Args {
 #[actix_web::main]
 async fn main() {
     let args = Args::parse();
-    let config = Config::from_file(args.config).expect("Failed to parse config");
+    let config = Config::load(args.config, CONFIG_FILE).expect("Failed to parse config");
 
     if args.health_check {
         std::process::exit(health_check(config.port));
