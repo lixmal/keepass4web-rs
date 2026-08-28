@@ -21,6 +21,19 @@ const UPDATE_THRESHOLD: Duration = Duration::from_secs(1);
 #[derive(Debug, Clone)]
 pub struct CacheExpiredError;
 
+// returned when the user has no cached database at all, which is the ordinary
+// state of a session that has not been unlocked yet rather than a fault
+#[derive(Debug)]
+pub struct NotOpenError;
+
+impl Display for NotOpenError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "no database is open")
+    }
+}
+
+impl Error for NotOpenError {}
+
 impl Display for CacheExpiredError {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "entry expired")
@@ -81,7 +94,7 @@ impl DbCache {
 
     pub async fn retrieve(&self, session: &Session, timeout: Duration) -> Result<Encrypted> {
         let user = self.get_user(session)?;
-        let mut enc = self.read().await.get(user.as_str()).ok_or(anyhow!("enc db not found in store"))?.clone();
+        let mut enc = self.read().await.get(user.as_str()).ok_or(NotOpenError)?.clone();
 
         if Instant::now() >= enc.expiry {
             info!("database of user '{}' expired", user);
