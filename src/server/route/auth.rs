@@ -6,7 +6,7 @@ use mime::TEXT_HTML;
 use serde::Serialize;
 use serde_json::json;
 
-use crate::{auth_backend, db_backend};
+use crate::{audit, auth_backend, db_backend};
 use crate::auth::{BackendLogin, DbLogin, gen_token, SESSION_KEY_USER, UserLogin};
 use crate::auth_backend::{AuthCache, is_invalid_credentials, SESSION_KEY_AUTH_STATE, UserInfo};
 use crate::config::config::Config;
@@ -283,6 +283,7 @@ async fn db_login(request: HttpRequest, session: Session, config: Data<Config>, 
         ));
     }
 
+    audit::database(&username, audit::OPENED);
     info!("db login from '{}': successful", username);
     HttpResponse::Ok().json(json!(
         {
@@ -328,6 +329,7 @@ async fn close_db(session: Session, config: Data<Config>, db_cache: Data<DbCache
         return err;
     }
 
+    audit::database(&session.get_user_id(), audit::CLOSED);
     info!("close db from '{}': successful", session.get_user_id());
     HttpResponse::Ok().json(json!(
         {
@@ -425,6 +427,7 @@ async fn save_db(session: Session, config: Data<Config>, db_cache: Data<DbCache>
         }));
     }
 
+    audit::database(&username, audit::SAVED);
     info!("save_db from '{}': successful", username);
     HttpResponse::Ok().json(json!({ "success": true }))
 }
