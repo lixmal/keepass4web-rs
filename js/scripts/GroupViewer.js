@@ -1,10 +1,17 @@
 import React from 'react'
 import withNavigateHook from './nagivateHook'
+import GroupPicker from './GroupPicker'
 import {
     IconPlus, IconPencil, IconTrash, IconLock, IconCheck, IconX, IconFolder, IconMonitor, IconDatabase,
+    IconMove,
 } from './Icons'
 
 const NIL_UUID = '00000000-0000-0000-0000-000000000000'
+
+// an entry past the date it was set to expire on
+function isExpired(entry) {
+    return Boolean(entry.expires && entry.expiry && new Date(entry.expiry) < new Date())
+}
 
 function entryIcon(entry) {
     if (entry.custom_icon_uuid)
@@ -27,6 +34,8 @@ class GroupViewer extends React.Component {
             showGroupForm: false,
             newGroupName:  '',
             groupSaving:   false,
+            // the entry or group waiting for a destination
+            moving:        null,
         }
     }
 
@@ -89,15 +98,65 @@ class GroupViewer extends React.Component {
         })
     }
 
+    // ── Delete group ─────────────────────────────────────────────
+
+    deleteGroup() {
+        const { group } = this.props
+        const entries = (group.entries || []).length
+        const warning = entries > 0
+            ? `Delete "${group.title}" and the ${entries} entr${entries !== 1 ? 'ies' : 'y'} in it?`
+            : `Delete "${group.title}"?`
+        if (!window.confirm(warning)) return
+
+        KeePass4Web.fetch('group', {
+            method: 'DELETE',
+            data: { id: group.id },
+            success: () => { if (this.props.onGroupDeleted) this.props.onGroupDeleted() },
+            error: KeePass4Web.error.bind(this),
+        })
+    }
+
+    // ── Move ─────────────────────────────────────────────────────
+
+    moveEntry(entry, e) {
+        e.stopPropagation()
+        this.setState({ moving: { kind: 'entry', id: entry.id, title: entry.title } })
+    }
+
+    moveGroup() {
+        const { group } = this.props
+        this.setState({ moving: { kind: 'group', id: group.id, title: group.title } })
+    }
+
+    confirmMove(groupId) {
+        const { moving } = this.state
+        if (!moving) return
+
+        KeePass4Web.fetch(moving.kind === 'entry' ? 'move_entry' : 'move_group', {
+            method: 'PUT',
+            data: { id: moving.id, group_id: groupId },
+            success: () => {
+                this.setState({ moving: null })
+                if (this.props.onMoved) this.props.onMoved()
+            },
+            error: (err) => {
+                this.setState({ moving: null })
+                KeePass4Web.error.call(this, err)
+            },
+        })
+    }
+
     render() {
         const { group, groupDepth, selectedEntryId, onSelect, onNewEntry, onEditEntry, mask } = this.props
-        const { editingTitle, titleDraft, titleSaving, showGroupForm, newGroupName, groupSaving } = this.state
+        const { editingTitle, titleDraft, titleSaving, showGroupForm, newGroupName, groupSaving, moving } = this.state
 
         const panelClass = `kp-center${mask ? ' kp-loading' : ''}`
         if (!group) return <div className="kp-center"/>
 
         const isSearch    = group.id === NIL_UUID
-        const canAddGroup = !isSearch && (groupDepth === undefined || groupDepth < 2)
+        const canAddGroup = !isSearch
+        // the root has no parent to be moved to and cannot be deleted
+        const canEditGroup = !isSearch && groupDepth !== undefined && groupDepth > 0
 
         // ── heading ──────────────────────────────────────────────
         let titleEl
@@ -135,6 +194,28 @@ class GroupViewer extends React.Component {
                                 <IconPencil size={13}/>
                             </button>
                         )}
+                        {canEditGroup && (
+                            <button
+                                className="kp-btn-link"
+                                title="Move group"
+                                data-testid="move-group"
+                                onClick={this.moveGroup.bind(this)}
+                                style={{ marginLeft: 4 }}
+                            >
+                                <IconMove size={13}/>
+                            </button>
+                        )}
+                        {canEditGroup && (
+                            <button
+                                className="kp-btn-link"
+                                title="Delete group"
+                                data-testid="delete-group"
+                                onClick={this.deleteGroup.bind(this)}
+                                style={{ marginLeft: 4 }}
+                            >
+                                <IconTrash size={13}/>
+                            </button>
+                        )}
                     </h2>
                     <small>
                         {(group.entries || []).length} saved entr{(group.entries || []).length !== 1 ? 'ies' : 'y'}
@@ -147,7 +228,8 @@ class GroupViewer extends React.Component {
         const cards = (group.entries || []).map(entry => (
             <div
                 key={entry.id}
-                className={`kp-card${selectedEntryId === entry.id ? ' active' : ''}`}
+                className={`kp-card${selectedEntryId === entry.id ? ' active' : ''}`
+                    + (isExpired(entry) ? ' expired' : '')}
                 data-testid="entry-card"
                 onClick={() => onSelect && onSelect(entry)}
             >
@@ -167,6 +249,14 @@ class GroupViewer extends React.Component {
                         onClick={ev => { ev.stopPropagation(); onEditEntry && onEditEntry(entry) }}
                     >
                         <IconPencil size={13}/>
+                    </button>
+                    <button
+                        className="kp-btn-icon"
+                        title="Move entry"
+                        data-testid="move-entry"
+                        onClick={this.moveEntry.bind(this, entry)}
+                    >
+                        <IconMove size={13}/>
                     </button>
                     <button
                         className="kp-btn-icon"
@@ -246,6 +336,17 @@ class GroupViewer extends React.Component {
                         </div>
                     )}
                 </div>
+
+                {moving && this.props.tree && (
+                    <GroupPicker
+                        tree={this.props.tree}
+                        title={`Move "${moving.title}" to`}
+                        currentId={moving.kind === 'entry' ? group.id : undefined}
+                        excludeId={moving.kind === 'group' ? moving.id : undefined}
+                        onPick={this.confirmMove.bind(this)}
+                        onCancel={() => this.setState({ moving: null })}
+                    />
+                )}
             </div>
         )
     }

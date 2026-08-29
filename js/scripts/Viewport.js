@@ -15,6 +15,8 @@ class Viewport extends React.Component {
         this.onSearch       = this.onSearch.bind(this)
         this.onGroupRenamed = this.onGroupRenamed.bind(this)
         this.onGroupCreated = this.onGroupCreated.bind(this)
+        this.onGroupDeleted = this.onGroupDeleted.bind(this)
+        this.onMoved        = this.onMoved.bind(this)
         this.onNewEntry     = this.onNewEntry.bind(this)
         this.onEditEntry    = this.onEditEntry.bind(this)
         this.onFormSaved    = this.onFormSaved.bind(this)
@@ -131,6 +133,31 @@ class Viewport extends React.Component {
         }))
     }
 
+    // A deleted group takes the selection with it, so the tree comes back and
+    // the root takes over as the group on show.
+    onGroupDeleted() {
+        KeePass4Web.fetch('get_groups', {
+            method: 'GET',
+            success: (data) => {
+                this.setState({ tree: data.groups, rightPanel: { mode: 'none', entry: null } })
+                this.onGroupSelect(data.groups)
+            },
+            error: KeePass4Web.error.bind(this),
+        })
+    }
+
+    // A move changes both where things sit in the tree and what the open group
+    // holds, so both are read back.
+    onMoved() {
+        KeePass4Web.fetch('get_groups', {
+            method: 'GET',
+            success: (data) => this.setState({ tree: data.groups }),
+            error: KeePass4Web.error.bind(this),
+        })
+        this.refreshGroup()
+        this.setState({ rightPanel: { mode: 'none', entry: null } })
+    }
+
     onAddRootGroup() {
         const name = window.prompt('New group name:')
         if (!name || !name.trim()) return
@@ -196,9 +223,16 @@ class Viewport extends React.Component {
         }
     }
 
+    // The first delete creates the recycle bin, so the tree is read back too:
+    // otherwise the bin holding the entry does not show up until a reload.
     onEntryDeleted() {
         this.refreshGroup()
         this.setState({ rightPanel: { mode: 'none', entry: null } })
+        KeePass4Web.fetch('get_groups', {
+            method: 'GET',
+            success: (data) => this.setState({ tree: data.groups }),
+            error: KeePass4Web.error.bind(this),
+        })
     }
 
     // ── Save DB ───────────────────────────────────────────────────
@@ -329,6 +363,9 @@ class Viewport extends React.Component {
                         onEntryDeleted={this.onEntryDeleted}
                         onGroupRenamed={this.onGroupRenamed}
                         onGroupCreated={this.onGroupCreated}
+                        onGroupDeleted={this.onGroupDeleted}
+                        onMoved={this.onMoved}
+                        tree={tree}
                     />
 
                     <div className={`kp-detail${detailOpen ? ' open' : ''}`}>

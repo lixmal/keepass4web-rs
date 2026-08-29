@@ -1,4 +1,5 @@
 use actix_web::web::{Path, Query};
+use chrono::NaiveDateTime;
 use anyhow::{anyhow, bail};
 use anyhow::Result;
 use base64;
@@ -56,6 +57,46 @@ pub struct CustomField {
     pub value: String,
     #[serde(default)]
     pub protected: bool,
+}
+
+// Everything a request can set on an entry. One struct rather than a dozen
+// positional arguments, since create and update set exactly the same things.
+pub struct EntryFields<'a> {
+    pub title: &'a str,
+    pub username: &'a str,
+    pub password: &'a str,
+    pub url: &'a str,
+    pub notes: &'a str,
+    pub icon: Option<usize>,
+    pub tags: &'a [String],
+    pub custom_fields: &'a [CustomField],
+    pub expires: bool,
+    pub expiry: Option<NaiveDateTime>,
+}
+
+impl EntryFields<'_> {
+    fn apply(&self, entry: &mut keepass::db::EntryMut<'_>) {
+        entry.set_unprotected("Title", self.title);
+        entry.set_unprotected("UserName", self.username);
+        // the client never receives the password, so it cannot send it back:
+        // an empty one means "leave it alone", not "clear it"
+        if !self.password.is_empty() {
+            entry.set_protected("Password", self.password);
+        }
+        entry.set_unprotected("URL", self.url);
+        entry.set_unprotected("Notes", self.notes);
+        if let Some(id) = self.icon {
+            entry.set_icon_builtin(id);
+        }
+
+        entry.times.expires = Some(self.expires);
+        if self.expires {
+            entry.times.expiry = self.expiry;
+        }
+
+        entry.tags = self.tags.to_vec();
+        KeePass::apply_custom_fields(entry, self.custom_fields);
+    }
 }
 
 #[derive(Deserialize)]
@@ -198,71 +239,23 @@ impl KeePass {
     }
 
 
-    pub fn create_entry(
-        &mut self,
-        group_id: &Uuid,
-        title: &str,
-        username: &str,
-        password: &str,
-        url: &str,
-        notes: &str,
-        icon: Option<usize>,
-        tags: &[String],
-        custom_fields: &[CustomField],
-    ) -> Result<Uuid> {
+    pub fn create_entry(&mut self, group_id: &Uuid, fields: &EntryFields) -> Result<Uuid> {
         let group_id = GroupId::from_uuid(*group_id);
         let mut group = self.db.group_mut(group_id).ok_or(NotFoundError("group"))?;
 
         let mut entry = group.add_entry();
-        entry.set_unprotected("Title", title);
-        entry.set_unprotected("UserName", username);
-        if !password.is_empty() {
-            entry.set_protected("Password", password);
-        }
-        entry.set_unprotected("URL", url);
-        entry.set_unprotected("Notes", notes);
-        if let Some(id) = icon {
-            entry.set_icon_builtin(id);
-        }
-        entry.tags = tags.to_vec();
-        Self::apply_custom_fields(&mut entry, custom_fields);
+        fields.apply(&mut entry);
 
         Ok(entry.id().uuid())
     }
 
-    pub fn update_entry(
-        &mut self,
-        entry_id: &Uuid,
-        title: &str,
-        username: &str,
-        password: &str,
-        url: &str,
-        notes: &str,
-        icon: Option<usize>,
-        tags: &[String],
-        custom_fields: &[CustomField],
-    ) -> Result<()> {
+    pub fn update_entry(&mut self, entry_id: &Uuid, fields: &EntryFields) -> Result<()> {
         let entry_id = EntryId::from_uuid(*entry_id);
         let mut entry = self.db.entry_mut(entry_id).ok_or(NotFoundError("entry"))?;
 
         // editing through a tracked reference keeps the previous version in the
         // entry's history, the way every other client records an edit
-        entry.edit_tracking(|entry| {
-            entry.set_unprotected("Title", title);
-            entry.set_unprotected("UserName", username);
-            if !password.is_empty() {
-                entry.set_protected("Password", password);
-            }
-            entry.set_unprotected("URL", url);
-            entry.set_unprotected("Notes", notes);
-            if let Some(id) = icon {
-                entry.set_icon_builtin(id);
-            }
-
-            let mut entry = entry.as_mut();
-            entry.tags = tags.to_vec();
-            Self::apply_custom_fields(&mut entry, custom_fields);
-        });
+        entry.edit_tracking(|entry| fields.apply(&mut entry.as_mut()));
 
         Ok(())
     }
@@ -304,11 +297,17 @@ impl KeePass {
         Ok(group.id().uuid())
     }
 
-    pub fn rename_group(&mut self, group_id: &Uuid, name: &str) -> Result<()> {
+    pub fn update_group(&mut self, group_id: &Uuid, name: &str, notes: Option<&str>, icon: Option<usize>) -> Result<()> {
         let group_id = GroupId::from_uuid(*group_id);
         let mut group = self.db.group_mut(group_id).ok_or(NotFoundError("group"))?;
 
         group.name = name.to_string();
+        if let Some(notes) = notes {
+            group.notes = Some(notes.to_string()).filter(|n| !n.is_empty());
+        }
+        if let Some(id) = icon {
+            group.set_icon_builtin(id);
+        }
 
         Ok(())
     }
@@ -521,8 +520,9 @@ impl KeePass {
                 icon: builtin_icon(&entry.icon().cloned()),
                 custom_icon_uuid: custom_icon_uuid(&entry.icon().cloned()),
                 url: entry.get_url().map(String::from),
-                expires: None,
-                expiry: None,
+                // the list marks expired entries, so it needs the date
+                expires: entry.times.expires,
+                expiry: entry.times.expiry.map(|t| t.and_utc().to_rfc3339()),
                 times: None,
                 history: None,
             })
