@@ -125,8 +125,25 @@ htpasswd:
 
 ### General settings ###
 
+# Every duration below is written the same way: a number and a unit, and any
+# number of those in a row. Accepted units are s/sec/seconds, min/minutes,
+# h/hours, days, weeks, months and years, with or without a space:
+#
+#   '30s'   '45min'   '2h 30m'   '10 minutes'   '1 hour 5 minutes'
+#   '1day'  '3 days'  '1 week'   '1month'       '1y'
+#
+# 'months' and 'years' are averages (30.44 and 365.25 days), so prefer days or
+# weeks where the exact length matters. There is no value meaning "never";
+# '0s' expires immediately rather than never.
+
 # Time before the database is automatically closed (user idle timeout).
 # User must re-enter the database master password after this.
+# Shorter is safer: the decryption key is held until this elapses, so this is
+# how long a walked-away-from session stays usable.
+#   '5 minutes'  a shared or public machine
+#   '10 minutes' the default
+#   '1 hour'     a single-user desktop where re-typing the master password is
+#                the bigger annoyance
 db_session_timeout: '10 minutes'
 
 # How often to re-check whether the auth backend has changed
@@ -152,7 +169,17 @@ search:
 # Set a static value to keep sessions across restarts.
 # session_secret_key: ''
 
-# How long a session cookie lives in the browser.
+# How long a session cookie lives in the browser, which is how long the user
+# stays logged in to the auth backend. Independent of db_session_timeout: the
+# database can close while the session is still valid, and then only the master
+# password is asked for again, not the backend login.
+# Outliving it means logging in from scratch, so this is usually the longer of
+# the two.
+#   '1 hour'  the default
+#   '8 hours' a working day without re-authenticating
+#   '1 week'  a personal instance you do not want to keep logging in to
+# Sessions do not survive a restart unless session_secret_key is set above,
+# whatever this says.
 session_lifetime: '1 hour'
 
 # SameSite policy for the session cookie: strict / lax / none
