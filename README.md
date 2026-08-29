@@ -172,7 +172,7 @@ Example docker:
       -p 8080:8080 -v ./config.yml:/conf/config.yml \
       -v ./tests/test.kdbx:/db.kdbx \
       --security-opt seccomp=seccomp/keyring.json \
-      ghcr.io/lixmal/keepass4web-rs:master
+      ghcr.io/lixmal/keepass4web-rs:main
 
 Example podman:
 
@@ -181,7 +181,7 @@ Example podman:
       -p 8080:8080 -v ./config.yml:/conf/config.yml \
       -v ./tests/test.kdbx:/db.kdbx \
       --security-opt seccomp=seccomp/keyring.json \
-      ghcr.io/lixmal/keepass4web-rs:master
+      ghcr.io/lixmal/keepass4web-rs:main
 
 (master password: `test`)
 
