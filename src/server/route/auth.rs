@@ -6,16 +6,21 @@ use mime::TEXT_HTML;
 use serde::Serialize;
 use serde_json::json;
 
-use crate::{auth_backend, db_backend};
-use crate::auth::{BackendLogin, DbLogin, SESSION_KEY_USER, UserLogin};
+use crate::{audit, auth_backend, db_backend};
+use crate::auth::{BackendLogin, DbLogin, gen_token, SESSION_KEY_USER, UserLogin};
 use crate::auth_backend::{AuthCache, is_invalid_credentials, SESSION_KEY_AUTH_STATE, UserInfo};
 use crate::config::config::Config;
 use crate::keepass::db_cache::DbCache;
 use crate::keepass::keepass::KeePass;
 use crate::rate_limit::RateLimiter;
 use crate::server::route::INDEX_FILE;
-use crate::server::route::util::{_close_db, check_user_session, db_is_open, get_db, revoke_key, set_user_session, store_key};
+use crate::server::server::CSP;
+use crate::server::route::util::{_close_db, check_user_session, db_is_open, get_db, revoke_key, set_user_session, store_key, SESSION_KEY_USED_KEYFILE};
 use crate::session::AuthSession;
+
+// a fresh value per response, so the policy names this page's script and no
+// other
+const NONCE_LENGTH: usize = 32;
 
 #[derive(Serialize)]
 struct Settings {
@@ -44,6 +49,8 @@ async fn authenticated(session: Session, config: Data<Config>, db_cache: Data<Db
         "data": {
             "backend": backend,
             "db": db,
+            // so the save form knows to ask for the key file again
+            "used_keyfile": session.get::<bool>(SESSION_KEY_USED_KEYFILE).ok().flatten().unwrap_or(false),
         },
     });
 
@@ -225,6 +232,20 @@ async fn db_login(request: HttpRequest, session: Session, config: Data<Config>, 
 
     rate_limiter.success(&rate_key).await;
 
+    // Remembered so the client can ask for the key file again when the
+    // database is saved: the same credentials have to be presented, and a save
+    // form that only asked for a password would be a dead end for anyone whose
+    // database needs a file as well. The file itself is not kept.
+    if let Err(err) = session.insert(SESSION_KEY_USED_KEYFILE, params.key.is_some()) {
+        error!("db login from '{}': failed to record the key file use: {}", username, err);
+        return HttpResponse::InternalServerError().json(json!(
+            {
+                "success": false,
+                "message": "failed to store session",
+            }
+        ));
+    }
+
     let (key, enc_db) = match db.to_enc() {
         Ok(v) => v,
         Err(err) => {
@@ -262,6 +283,7 @@ async fn db_login(request: HttpRequest, session: Session, config: Data<Config>, 
         ));
     }
 
+    audit::database(&username, audit::OPENED);
     info!("db login from '{}': successful", username);
     HttpResponse::Ok().json(json!(
         {
@@ -307,6 +329,7 @@ async fn close_db(session: Session, config: Data<Config>, db_cache: Data<DbCache
         return err;
     }
 
+    audit::database(&session.get_user_id(), audit::CLOSED);
     info!("close db from '{}': successful", session.get_user_id());
     HttpResponse::Ok().json(json!(
         {
@@ -382,6 +405,20 @@ async fn save_db(session: Session, config: Data<Config>, db_cache: Data<DbCache>
         }
     };
 
+    // The save re-encrypts the database with whatever was sent, so credentials
+    // that do not open the stored database would quietly replace the ones that
+    // do: saving with only a password would drop the key file the database
+    // needs, leaving it open to the password alone and locking out the person
+    // who still presents the key file. Opening it with them first is what says
+    // they are the same credentials.
+    if let Err(err) = KeePass::key_opens_stored(db_backend.as_ref(), &params, &user_info).await {
+        info!("save_db from '{}': the credentials do not open the stored database: {}", username, err);
+        return HttpResponse::Unauthorized().json(json!({
+            "success": false,
+            "message": "the master password and key file must be the ones the database was opened with",
+        }));
+    }
+
     if let Err(err) = keepass.to_backend_with_key(db_backend.as_mut(), db_key, &user_info).await {
         error!("save_db from '{}': {}", username, err);
         return HttpResponse::InternalServerError().json(json!({
@@ -390,6 +427,7 @@ async fn save_db(session: Session, config: Data<Config>, db_cache: Data<DbCache>
         }));
     }
 
+    audit::database(&username, audit::SAVED);
     info!("save_db from '{}': successful", username);
     HttpResponse::Ok().json(json!({ "success": true }))
 }
@@ -461,16 +499,86 @@ async fn embed_in_index(success: bool, message: Option<String>, data: Option<Ses
         }
     };
 
-    index = index.replace("</head>", format!(r#"
-        <script>
-            window.KeePass4WebResponse = {}
-        </script>
-        </head>
-    "#, json!({
+    let payload = script_safe_json(&json!({
        "success": success,
        "message": message,
        "data": data,
-    })).as_str());
+    }));
 
-    HttpResponse::Ok().content_type(TEXT_HTML).body(index)
+    // this page carries the one inline script in the app, so it names it in
+    // its own policy rather than the whole app having to allow inline scripts
+    let nonce = gen_token(NONCE_LENGTH);
+
+    index = index.replace("</head>", format!(r#"
+        <script nonce="{}">
+            window.KeePass4WebResponse = {}
+        </script>
+        </head>
+    "#, nonce, payload).as_str());
+
+    HttpResponse::Ok()
+        .content_type(TEXT_HTML)
+        .append_header((
+            "Content-Security-Policy",
+            CSP.replace("script-src 'self'", &format!("script-src 'self' 'nonce-{}'", nonce)),
+        ))
+        .body(index)
+}
+
+/// JSON that is safe to write inside a `<script>` block.
+///
+/// The values here carry things the server did not choose: a display name from
+/// the directory, an error naming what a provider sent back. JSON escaping
+/// leaves `<` and `/` alone, so a name containing `</script>` would end the
+/// script block and whatever followed would run as this origin. Escaping them
+/// as `\uXXXX` keeps the same string while leaving nothing for the HTML parser
+/// to act on. U+2028 and U+2029 go too: they are line terminators to a
+/// JavaScript parser and would break the literal.
+fn script_safe_json(value: &serde_json::Value) -> String {
+    value.to_string()
+        .replace('<', "\\u003c")
+        .replace('>', "\\u003e")
+        .replace('&', "\\u0026")
+        .replace('\u{2028}', "\\u2028")
+        .replace('\u{2029}', "\\u2029")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // A display name comes from the directory or the identity provider, not
+    // from us. Written into the page as it stands, one containing a closing
+    // script tag would end the block and run as this origin, which in a
+    // password manager means the session and everything it can read.
+    #[test]
+    fn a_name_cannot_end_the_script_block() {
+        let hostile = "x</script><script>alert(1)</script>";
+        let payload = script_safe_json(&json!({ "data": { "cn": hostile } }));
+
+        assert!(!payload.contains("</script>"), "{}", payload);
+        assert!(!payload.contains('<'), "{}", payload);
+        assert!(!payload.contains('>'), "{}", payload);
+    }
+
+    // and it still means the same thing once the browser reads it back
+    #[test]
+    fn the_escaped_payload_still_carries_the_value() {
+        let name = "Ada <Lovelace> & co";
+        let payload = script_safe_json(&json!({ "cn": name }));
+
+        let back: serde_json::Value = serde_json::from_str(&payload).unwrap();
+        assert_eq!(back["cn"], name);
+    }
+
+    #[test]
+    fn javascript_line_terminators_are_escaped() {
+        let payload = script_safe_json(&json!({ "message": "a\u{2028}b\u{2029}c" }));
+
+        assert!(!payload.contains('\u{2028}'), "{}", payload);
+        assert!(!payload.contains('\u{2029}'), "{}", payload);
+
+        let back: serde_json::Value = serde_json::from_str(&payload).unwrap();
+        assert_eq!(back["message"], "a\u{2028}b\u{2029}c");
+    }
 }

@@ -42,7 +42,19 @@ impl std::error::Error for NotFoundError {}
 
 // the fields the format defines: everything else on an entry is a custom field
 // the user added and is theirs to name
-const STANDARD_FIELDS: [&str; 5] = ["Title", "UserName", "Password", "URL", "Notes"];
+pub(crate) const STANDARD_FIELDS: [&str; 5] = ["Title", "UserName", "Password", "URL", "Notes"];
+
+/// The field an asked-for name refers to.
+///
+/// The client asks for the password under the name the interface uses, which
+/// is not the name the format gives it. Everything else is asked for by the
+/// name it already has.
+pub(crate) fn field_name(asked: &str) -> &str {
+    match asked {
+        "password" => "Password",
+        name => name,
+    }
+}
 
 // what clients call the recycle bin, and the bin icon from the standard set
 const RECYCLE_BIN_NAME: &str = "Recycle Bin";
@@ -148,6 +160,33 @@ impl KeePass {
 
         // TODO: add some aad from the keepass db
         Encrypted::encrypt(ser_db, &[], self.config.db_session_timeout)
+    }
+
+    /// Whether these credentials open the database that is currently stored.
+    ///
+    /// Saving re-encrypts the database with whatever it is given, so this is
+    /// what says the credentials are the ones the database already has rather
+    /// than new ones that would replace them.
+    ///
+    /// Unlike [`Self::from_backend`] this never writes: a database that is not
+    /// there cannot vouch for anything, and creating one to check against
+    /// would accept any credentials at all.
+    pub async fn key_opens_stored(db_backend: &dyn DbBackend, params: &DbLogin, user_info: &UserInfo) -> Result<()> {
+        let db_key = Self::db_key_from_params(db_backend, params, user_info).await?;
+
+        let mut buf = vec![];
+        {
+            let mut reader = db_backend.get_db_read(user_info).await?;
+            reader.read_to_end(&mut buf).await?;
+        }
+
+        tokio::task::spawn_blocking(move || {
+            let result = Database::open(&mut buf.as_slice(), db_key);
+            buf.zeroize();
+            result
+        }).await??;
+
+        Ok(())
     }
 
     pub async fn from_backend(config: &Config, db_backend: &mut dyn DbBackend, params: &DbLogin, user_info: &UserInfo) -> Result<Self> {
@@ -547,12 +586,7 @@ impl KeePass {
     pub fn get_protected(&self, params: &Query<Protected>) -> Result<SecretString> {
         let entry = self.db.entry(EntryId::from_uuid(params.entry_id)).ok_or(NotFoundError("entry"))?;
 
-        let name = match params.name.as_str() {
-            "password" => "Password",
-            k => k,
-        };
-
-        let field = entry.fields.get(name).ok_or(NotFoundError("field"))?;
+        let field = entry.fields.get(field_name(&params.name)).ok_or(NotFoundError("field"))?;
         if !field.is_protected() {
             bail!("not a protected field");
         }

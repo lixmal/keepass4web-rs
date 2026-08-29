@@ -1,6 +1,6 @@
 services:
   keepass4web-rs:
-    image: ghcr.io/lixmal/keepass4web-rs:master
+    image: ghcr.io/lixmal/keepass4web-rs:main
     ports:
       - "${APP_PORT:-8080}:8080"
     volumes:

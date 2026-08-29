@@ -14,6 +14,10 @@ use crate::session::AuthSession;
 
 pub const SESSION_KEY_KEY_ID: &str = "key_id";
 
+// whether the database was opened with a key file, so the save form can ask
+// for it again. Only the fact is kept, never the file.
+pub const SESSION_KEY_USED_KEYFILE: &str = "used_keyfile";
+
 const CSRF_TOKEN_LENGTH: usize = 32;
 
 pub(crate) type CsrfToken = String;
