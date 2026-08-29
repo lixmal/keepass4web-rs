@@ -42,25 +42,6 @@ test.describe('KeePassXC compatibility', () => {
     fs.copyFileSync(FIXTURE, DB);
   });
 
-  // The fixture entries carry an attachment, in their history as well, and
-  // saving a database that has one is refused. The specs that write replace
-  // those entries with fresh ones, which drops the history that holds the
-  // attachment, and empty the recycle bin the removal fills. Creating a
-  // database outright is not an option: keepassxc writes a newer kdbx version
-  // than this app can save.
-  function withoutAttachments() {
-    const entries = ['entry1', 'entry1 - Clone'];
-
-    for (const title of entries) {
-      kxc(['rm', '-q'], [`group1/${title}`]);
-    }
-    for (const title of entries) {
-      kxc(['rm', '-q'], [`Recycle Bin/${title}`]);
-      kxc(['add', '-q', '-u', 'someusr', '--url', 'someurl', '-p'], [`group1/${title}`],
-        `${MASTER_PASSWORD}\nsomepass123\n`);
-    }
-  }
-
   async function openVault(page) {
     await page.goto('/');
     await page.waitForURL(/\/db_login/, { timeout: LOGIN_TIMEOUT });
@@ -70,7 +51,6 @@ test.describe('KeePassXC compatibility', () => {
   }
 
   test('keepassxc reads an entry this app wrote', async ({ page }) => {
-    withoutAttachments();
     await openVault(page);
 
     await page.locator('[data-testid="tree-node"]').filter({ hasText: 'group1' }).click();
@@ -113,7 +93,6 @@ test.describe('KeePassXC compatibility', () => {
   });
 
   test('saving keeps the key derivation the database was created with', async ({ page }) => {
-    withoutAttachments();
     const before = kxc(['db-info', '-q']);
 
     await openVault(page);
@@ -137,7 +116,6 @@ test.describe('KeePassXC compatibility', () => {
   });
 
   test('keepassxc reads the tags and custom fields this app wrote', async ({ page }) => {
-    withoutAttachments();
     await openVault(page);
 
     await page.locator('[data-testid="tree-node"]').filter({ hasText: 'group1' }).click();
@@ -178,27 +156,111 @@ test.describe('KeePassXC compatibility', () => {
     expect(shown).toContain('secretfield: secretvalue');
   });
 
-  test('refuses to save a database whose attachments it would orphan', async ({ page }) => {
-    // the fixture entries carry one, and the reference to it does not survive
-    // a write, so the database is left alone instead
+  test('keeps attachments readable by keepassxc across a save', async ({ page }) => {
+    // saving used to drop the reference an entry holds to its attachment,
+    // leaving the bytes in the file with nothing pointing at them
+    const before = path.join(path.dirname(DB), 'attachment-before');
+    fs.rmSync(before, { force: true });
+    kxc(['attachment-export', '-q'], ['group1/entry1', 'favicon.ico.jpeg', before]);
+    const original = fs.readFileSync(before);
+    expect(original.length).toBeGreaterThan(0);
+
     await openVault(page);
 
     await page.locator('[data-testid="tree-node"]').filter({ hasText: 'group1' }).click();
     await page.getByRole('button', { name: 'New Entry' }).click();
-    await page.locator('#kp-f-title').fill('not saved');
+    await page.locator('#kp-f-title').fill('saved alongside an attachment');
     await page.getByRole('button', { name: 'Save Entry' }).click();
 
     await page.locator('.kp-nav-actions .kp-btn-primary').click();
     await page.locator('.kp-modal input[type="password"]').fill(MASTER_PASSWORD);
     const saved = page.waitForResponse((r) => r.url().includes('/api/v1/save_db'));
     await page.locator('.kp-modal button:has-text("Save")').click();
-    expect((await saved).status()).toBe(409);
+    expect((await saved).status()).toBe(200);
 
-    // the attachment and the entries around it are still there
+    // keepassxc still finds the attachment, byte for byte, next to the new entry
+    const after = path.join(path.dirname(DB), 'attachment-after');
+    fs.rmSync(after, { force: true });
+    kxc(['attachment-export', '-q'], ['group1/entry1', 'favicon.ico.jpeg', after]);
+    expect(fs.readFileSync(after).equals(original)).toBe(true);
+    expect(kxc(['ls', '-q'], ['group1'])).toContain('saved alongside an attachment');
+  });
+
+  test('serves an attachment for download', async ({ page }) => {
+    await openVault(page);
+
+    await page.locator('[data-testid="tree-node"]').filter({ hasText: 'group1' }).click();
+    await page.locator('[data-testid="entry-card"]').filter({ hasText: 'entry1' }).first().click();
+
+    const entryId = await page.evaluate(async () => {
+      const groups = await fetch('api/v1/get_groups', {
+        headers: { 'X-CSRF-Token': localStorage.getItem('CSRFToken') },
+      }).then((r) => r.json());
+      const group1 = groups.data.groups.children.find((g) => g.title === 'group1');
+      const entries = await fetch(`api/v1/get_group_entries?id=${group1.id}`, {
+        headers: { 'X-CSRF-Token': localStorage.getItem('CSRFToken') },
+      }).then((r) => r.json());
+      return entries.data.entries.find((e) => e.title === 'entry1').id;
+    });
+
+    const downloaded = await page.evaluate(async (id) => {
+      const response = await fetch(`api/v1/get_file?entry_id=${id}&filename=favicon.ico.jpeg`, {
+        headers: { 'X-CSRF-Token': localStorage.getItem('CSRFToken') },
+      });
+      return { status: response.status, size: (await response.arrayBuffer()).byteLength };
+    }, entryId);
+
+    expect(downloaded.status).toBe(200);
+
     const exported = path.join(path.dirname(DB), 'exported-attachment');
     fs.rmSync(exported, { force: true });
     kxc(['attachment-export', '-q'], ['group1/entry1', 'favicon.ico.jpeg', exported]);
-    expect(fs.statSync(exported).size).toBeGreaterThan(0);
-    expect(kxc(['ls', '-q'], ['group1'])).not.toContain('not saved');
+    expect(downloaded.size).toBe(fs.statSync(exported).size);
+  });
+
+  test('a deleted entry lands in the recycle bin keepassxc knows', async ({ page }) => {
+    await openVault(page);
+
+    await page.locator('[data-testid="tree-node"]').filter({ hasText: 'group1' }).click();
+    const entry = page.locator('[data-testid="entry-card"]').filter({ hasText: 'entry1 - Clone' });
+    await expect(entry).toBeVisible();
+
+    page.on('dialog', (dialog) => dialog.accept());
+    await entry.locator('[title="Delete entry"]').click();
+    await expect(entry).toHaveCount(0);
+
+    await page.locator('.kp-nav-actions .kp-btn-primary').click();
+    await page.locator('.kp-modal input[type="password"]').fill(MASTER_PASSWORD);
+    const saved = page.waitForResponse((r) => r.url().includes('/api/v1/save_db'));
+    await page.locator('.kp-modal button:has-text("Save")').click();
+    expect((await saved).status()).toBe(200);
+
+    // deleting must not destroy the entry: keepassxc finds it in the bin
+    expect(kxc(['ls', '-q'], ['group1'])).not.toContain('entry1 - Clone');
+    expect(kxc(['ls', '-q'], ['Recycle Bin'])).toContain('entry1 - Clone');
+  });
+
+  test('emptying the recycle bin deletes for good', async ({ page }) => {
+    // keepassxc puts it in the bin, the app deletes it from there permanently
+    kxc(['rm', '-q'], ['group1/entry1 - Clone']);
+    expect(kxc(['ls', '-q'], ['Recycle Bin'])).toContain('entry1 - Clone');
+
+    await openVault(page);
+
+    await page.locator('[data-testid="tree-node"]').filter({ hasText: 'Recycle Bin' }).click();
+    const entry = page.locator('[data-testid="entry-card"]').filter({ hasText: 'entry1 - Clone' });
+    await expect(entry).toBeVisible();
+
+    page.on('dialog', (dialog) => dialog.accept());
+    await entry.locator('[title="Delete entry"]').click();
+    await expect(entry).toHaveCount(0);
+
+    await page.locator('.kp-nav-actions .kp-btn-primary').click();
+    await page.locator('.kp-modal input[type="password"]').fill(MASTER_PASSWORD);
+    const saved = page.waitForResponse((r) => r.url().includes('/api/v1/save_db'));
+    await page.locator('.kp-modal button:has-text("Save")').click();
+    expect((await saved).status()).toBe(200);
+
+    expect(kxc(['ls', '-q'], ['Recycle Bin'])).not.toContain('entry1 - Clone');
   });
 });

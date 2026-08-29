@@ -13,6 +13,13 @@ use crate::keepass::keepass::{CustomField, File, Id, NotFoundError, Protected, S
 use crate::server::route::util;
 use crate::session::AuthSession;
 
+// what to move, and where it should end up
+#[derive(Deserialize)]
+struct Move {
+    id: Uuid,
+    group_id: Uuid,
+}
+
 #[derive(Deserialize)]
 struct NewEntry {
     group_id: Uuid,
@@ -194,17 +201,31 @@ async fn get_protected(session: Session, config: Data<Config>, db_cache: Data<Db
 
 #[get("/get_file")]
 async fn get_file(session: Session, config: Data<Config>, db_cache: Data<DbCache>, params: web::Query<File>) -> impl Responder {
-    if let Err(err) = util::get_db(&session, &config, &db_cache).await {
-        return err;
+    let keepass = match util::get_db(&session, &config, &db_cache).await {
+        Ok(v) => v,
+        Err(err) => return err,
     };
 
-    info!("{}: file download requested for '{}' of entry '{}', but it is not implemented", session.get_user_id(), params.filename, params.entry_id);
-    HttpResponse::NotImplemented().json(json!(
-        {
-            "success": false,
-            "message": "file download is not implemented yet",
+    let username = session.get_user_id();
+    let data = match keepass.get_file(&params) {
+        Ok(v) => v,
+        Err(err) => {
+            info!("{}: failed to get file '{}' of entry '{}': {}", username, params.filename, params.entry_id, err);
+            return error_response(&err, "failed to get file");
         }
-    ))
+    };
+
+    // the name is the user's, so it goes in quoted and stripped of anything
+    // that would let it break out of the header
+    let filename = params.filename.replace(['"', '\\', '\r', '\n'], "_");
+
+    HttpResponse::Ok()
+        // the bytes come out of the user's vault, so no cache along the way
+        // gets to keep a copy
+        .append_header(("Cache-Control", "no-store"))
+        .append_header(("Content-Disposition", format!("attachment; filename=\"{}\"", filename)))
+        .content_type("application/octet-stream")
+        .body(data)
 }
 
 #[get("/search_entries")]
@@ -260,7 +281,7 @@ async fn get_icon(session: Session, config: Data<Config>, db_cache: Data<DbCache
     HttpResponse::Ok()
         // UUID is unique, cache this forever
         .append_header(("Cache-Control", "public, max-age=31536000, s-maxage=31536000, immutable"))
-        .append_header(("ETag", icon.uuid.to_string()))
+        .append_header(("ETag", icon.id().uuid().to_string()))
         .content_type(icon_mime(&icon.data))
         .body(icon.data.clone())
 }
@@ -385,7 +406,7 @@ async fn rename_group(session: Session, config: Data<Config>, db_cache: Data<DbC
 }
 
 #[delete("/entry")]
-async fn delete_entry(session: Session, config: Data<Config>, db_cache: Data<DbCache>, params: web::Query<Id>) -> impl Responder {
+async fn delete_entry(session: Session, config: Data<Config>, db_cache: Data<DbCache>, params: web::Form<Id>) -> impl Responder {
     let username = session.get_user_id();
 
     if let Err(err) = util::modify_db(&session, &config, &db_cache, |kp| {
@@ -395,6 +416,48 @@ async fn delete_entry(session: Session, config: Data<Config>, db_cache: Data<DbC
     }
 
     info!("delete_entry from '{}': {}", username, params.id);
+    HttpResponse::Ok().json(json!({ "success": true }))
+}
+
+#[delete("/group")]
+async fn delete_group(session: Session, config: Data<Config>, db_cache: Data<DbCache>, params: web::Form<Id>) -> impl Responder {
+    let username = session.get_user_id();
+
+    if let Err(err) = util::modify_db(&session, &config, &db_cache, |kp| {
+        kp.delete_group(&params.id)
+    }).await {
+        return err;
+    }
+
+    info!("delete_group from '{}': {}", username, params.id);
+    HttpResponse::Ok().json(json!({ "success": true }))
+}
+
+#[put("/move_entry")]
+async fn move_entry(session: Session, config: Data<Config>, db_cache: Data<DbCache>, params: web::Form<Move>) -> impl Responder {
+    let username = session.get_user_id();
+
+    if let Err(err) = util::modify_db(&session, &config, &db_cache, |kp| {
+        kp.move_entry(&params.id, &params.group_id)
+    }).await {
+        return err;
+    }
+
+    info!("move_entry from '{}': {} to {}", username, params.id, params.group_id);
+    HttpResponse::Ok().json(json!({ "success": true }))
+}
+
+#[put("/move_group")]
+async fn move_group(session: Session, config: Data<Config>, db_cache: Data<DbCache>, params: web::Form<Move>) -> impl Responder {
+    let username = session.get_user_id();
+
+    if let Err(err) = util::modify_db(&session, &config, &db_cache, |kp| {
+        kp.move_group(&params.id, &params.group_id)
+    }).await {
+        return err;
+    }
+
+    info!("move_group from '{}': {} to {}", username, params.id, params.group_id);
     HttpResponse::Ok().json(json!({ "success": true }))
 }
 
