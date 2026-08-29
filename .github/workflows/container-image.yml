@@ -40,11 +40,15 @@ jobs:
         uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          # 'master' is the name this branch used to have. It stays on the
+          # same image so deployments pulling ':master' keep getting updates
+          # instead of silently sitting on the last build before the rename.
           tags: |
             type=ref,event=branch
             type=semver,pattern={{version}}
             type=sha
             latest
+            type=raw,value=master,enable={{is_default_branch}}
 
       - name: Build and push Container image
         uses: docker/build-push-action@263435318d21b8e681c14492fe198d362a7d2c83
