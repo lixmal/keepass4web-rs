@@ -402,6 +402,25 @@ body:has(.kp-app) {
   color: var(--kp-warn-text);
   border: 1px solid var(--kp-warn-border);
 }
+.kp-badge-danger {
+  background: var(--kp-danger-bg);
+  color: var(--kp-danger);
+  border: 1px solid var(--kp-danger);
+  margin-left: 8px;
+  vertical-align: middle;
+}
+
+/* an entry past its expiry, wherever it is listed */
+.kp-card.expired .kp-card-title,
+.kp-node-field-value[data-expired="true"] { color: var(--kp-danger); }
+
+.kp-checkbox {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: 13px; font-weight: 400;
+  color: var(--kp-text); white-space: nowrap;
+  text-transform: none; letter-spacing: normal;
+}
+.kp-checkbox input { margin: 0; }
 
 /* add group inline form */
 .kp-group-form {
@@ -681,6 +700,26 @@ textarea.kp-input {
 .kp-modal h4 { font-size: 15px; font-weight: 600; margin-bottom: 6px; }
 .kp-modal p { font-size: 13px; color: var(--kp-text-secondary); margin-bottom: 16px; }
 .kp-modal .kp-form-actions { border-top: none; padding-top: 0; }
+.kp-modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
+
+/* ─── GROUP PICKER ───────────────────────────────────────── */
+.kp-picker-list {
+  max-height: 320px; overflow-y: auto;
+  border: 1px solid var(--kp-border);
+  border-radius: var(--kp-r);
+  margin-top: 12px;
+}
+.kp-picker-row {
+  display: flex; align-items: center; gap: 8px;
+  width: 100%;
+  padding: 8px 10px;
+  background: transparent; border: none;
+  font-size: 13px; font-family: inherit; color: var(--kp-text);
+  text-align: left; cursor: pointer;
+}
+.kp-picker-row:hover:not(:disabled) { background: var(--kp-surface-hover); }
+.kp-picker-row:disabled { color: var(--kp-text-muted); cursor: default; }
+.kp-picker-current { margin-left: auto; font-size: 11px; color: var(--kp-text-muted); }
 
 /* ─── RESPONSIVE ─────────────────────────────────────────── */
 @media (max-width: 1100px) {

@@ -39,21 +39,52 @@ function customFieldsOf(entry) {
     }))
 }
 
+// The database keeps times in UTC, so the wall clock the user typed is turned
+// into an instant before it is sent. Sending it as it stands would move every
+// deadline by the reader's offset from UTC.
+function expiryToUtc(value) {
+    if (!value) return ''
+
+    const date = new Date(value)
+    if (isNaN(date.getTime())) return ''
+
+    return date.toISOString()
+}
+
+// the datetime-local input wants "YYYY-MM-DDTHH:MM" in local time, while the
+// entry carries an instant
+function expiryInputValue(entry) {
+    if (!entry || !entry.expiry) return ''
+
+    const date = new Date(entry.expiry)
+    if (isNaN(date.getTime())) return ''
+
+    const pad = n => String(n).padStart(2, '0')
+    return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`
+        + `T${pad(date.getHours())}:${pad(date.getMinutes())}`
+}
+
+function formOf(entry) {
+    const e = entry || {}
+    return {
+        title:    e.title    || '',
+        username: e.username || '',
+        password: '',
+        url:      e.url      || '',
+        notes:    e.notes    || '',
+        icon:     e.icon     != null ? e.icon : null,
+        tags:     (e.tags || []).join(', '),
+        fields:   customFieldsOf(e),
+        expires:  Boolean(e.expires),
+        expiry:   expiryInputValue(e),
+    }
+}
+
 class EntryForm extends React.Component {
     constructor(props) {
         super(props)
-        const e = props.entry || {}
         this.state = {
-            form: {
-                title:    e.title    || '',
-                username: e.username || '',
-                password: '',
-                url:      e.url      || '',
-                notes:    e.notes    || '',
-                icon:     e.icon     != null ? e.icon : null,
-                tags:     (e.tags || []).join(', '),
-                fields:   customFieldsOf(e),
-            },
+            form:         formOf(props.entry),
             saving:       false,
             showPassword: false,
             pickerOpen:   false,
@@ -63,18 +94,8 @@ class EntryForm extends React.Component {
 
     componentDidUpdate(prev) {
         if (prev.entry !== this.props.entry || prev.mode !== this.props.mode) {
-            const e = this.props.entry || {}
             this.setState({
-                form: {
-                    title:    e.title    || '',
-                    username: e.username || '',
-                    password: '',
-                    url:      e.url      || '',
-                    notes:    e.notes    || '',
-                    icon:     e.icon     != null ? e.icon : null,
-                    tags:     (e.tags || []).join(', '),
-                    fields:   customFieldsOf(e),
-                },
+                form: formOf(this.props.entry),
                 saving: false,
                 showPassword: false,
                 pickerOpen: false,
@@ -153,6 +174,7 @@ class EntryForm extends React.Component {
 
         const payload = { ...form }
         if (payload.icon === null) delete payload.icon
+        payload.expiry = form.expires ? expiryToUtc(form.expiry) : ''
         // a form encoded body cannot carry a list, so the custom fields travel
         // as json, and a field without a name is one the user never filled in
         payload.fields = JSON.stringify(
@@ -332,6 +354,32 @@ class EntryForm extends React.Component {
                             value={form.tags}
                             onChange={this.set.bind(this, 'tags')}
                         />
+                    </div>
+
+                    <div className="kp-field">
+                        <label htmlFor="kp-f-expires">Expiry</label>
+                        <div className="kp-form-field-row">
+                            <label className="kp-checkbox">
+                                <input
+                                    id="kp-f-expires"
+                                    data-testid="entry-expires"
+                                    type="checkbox"
+                                    checked={form.expires}
+                                    onChange={ev => this.setState(prev => ({
+                                        form: { ...prev.form, expires: ev.target.checked },
+                                    }))}
+                                />
+                                Expires
+                            </label>
+                            <input
+                                className="kp-input" id="kp-f-expiry"
+                                data-testid="entry-expiry-input"
+                                type="datetime-local"
+                                disabled={!form.expires}
+                                value={form.expiry}
+                                onChange={this.set.bind(this, 'expiry')}
+                            />
+                        </div>
                     </div>
 
                     <div className="kp-field">

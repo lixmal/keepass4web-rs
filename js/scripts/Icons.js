@@ -27,6 +27,7 @@ export const IconLock       = ({size} = {}) => icon(<><rect x="3" y="11" width="
 export const IconCheck      = ({size} = {}) => icon(<polyline points="20 6 9 17 4 12"/>, size)
 export const IconX          = ({size} = {}) => icon(<><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></>, size)
 export const IconDownload   = ({size} = {}) => icon(<><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></>, size)
+export const IconMove       = ({size} = {}) => icon(<><polyline points="5 9 2 12 5 15"/><polyline points="9 5 12 2 15 5"/><polyline points="15 19 12 22 9 19"/><polyline points="19 9 22 12 19 15"/><line x1="2" y1="12" x2="22" y2="12"/><line x1="12" y1="2" x2="12" y2="22"/></>, size)
 export const IconKey        = ({size} = {}) => icon(<><path d="m21 2-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0 3 3L22 7l-3-3m-3.5 3.5L19 4"/></>, size)
 export const IconMenu       = ({size} = {}) => icon(<><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></>, size)
 export const IconMonitor    = ({size} = {}) => icon(<><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></>, size)

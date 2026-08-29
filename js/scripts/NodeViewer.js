@@ -94,8 +94,11 @@ class NodeViewer extends React.Component {
     // ── File download ─────────────────────────────────────────────
 
     downloadFile(filename) {
+        const query = `entry_id=${encodeURIComponent(this.props.entry.id)}`
+            + `&filename=${encodeURIComponent(filename)}`
+
         const xhr = new XMLHttpRequest()
-        xhr.open('GET', 'get_file', true)
+        xhr.open('GET', `api/v1/get_file?${query}`, true)
         xhr.responseType = 'arraybuffer'
         xhr.setRequestHeader('X-CSRF-Token', KeePass4Web.getCSRFToken())
         xhr.setRequestHeader('Content-type', 'application/x-www-form-urlencoded; charset=UTF-8')
@@ -128,7 +131,7 @@ class NodeViewer extends React.Component {
             }
         }
         KeePass4Web.restartTimer(true)
-        xhr.send('id=' + encodeURIComponent(this.props.entry.id) + '&filename=' + encodeURIComponent(filename))
+        xhr.send()
     }
 
     // ── Render helpers ────────────────────────────────────────────
@@ -185,10 +188,33 @@ class NodeViewer extends React.Component {
         )
     }
 
+    // a timestamp the way a person reads it, in their own timezone
+    static formatTime(value) {
+        if (!value) return null
+        const date = new Date(value)
+        if (isNaN(date.getTime())) return null
+        return date.toLocaleString()
+    }
+
+    renderPlainField(label, value, testid) {
+        return (
+            <div className="kp-node-field" data-testid="entry-field">
+                <span className="kp-node-field-label" data-testid="entry-field-label">{label}</span>
+                <span className="kp-node-field-value" data-testid={testid || 'entry-field-value'}>{value}</span>
+                <span className="kp-node-field-actions"/>
+            </div>
+        )
+    }
+
     render() {
         const { entry, mask } = this.props
 
         if (!entry) return <div className={`kp-detail-content${mask ? ' kp-loading' : ''}`}/>
+
+        const expiry = entry.expires ? NodeViewer.formatTime(entry.expiry) : null
+        const expired = Boolean(entry.expires && entry.expiry && new Date(entry.expiry) < new Date())
+        const times = entry.times || {}
+        const history = entry.history || []
 
         let icon = null
         if (entry.custom_icon_uuid) {
@@ -222,7 +248,7 @@ class NodeViewer extends React.Component {
         }
 
         const files = []
-        for (const fname of Object.keys(entry.binary || {})) {
+        for (const fname of entry.binary || []) {
             files.push(
                 <div className="kp-node-field" data-testid="entry-field" key={fname}>
                     <span className="kp-node-field-label" data-testid="entry-field-label">File</span>
@@ -256,7 +282,12 @@ class NodeViewer extends React.Component {
                         {icon || <span style={{ fontSize: 28 }}>🔑</span>}
                     </div>
                     <div className="kp-detail-icon-info">
-                        <h4 data-testid="entry-title">{entry.title}</h4>
+                        <h4>
+                            <span data-testid="entry-title">{entry.title}</span>
+                            {expired && (
+                                <span className="kp-badge kp-badge-danger" data-testid="entry-expired">Expired</span>
+                            )}
+                        </h4>
                         {entry.url && (
                             <p>
                                 <a href={entry.url} target="_blank" rel="noopener noreferrer">{entry.url}</a>
@@ -315,10 +346,43 @@ class NodeViewer extends React.Component {
                         </>
                     )}
 
+                    {expiry && this.renderPlainField(
+                        'Expires',
+                        <span data-expired={expired ? 'true' : 'false'}>{expiry}</span>,
+                        'entry-expiry',
+                    )}
+
                     {files.length > 0 && (
                         <>
                             <div className="kp-node-section-label">Attachments</div>
                             {files}
+                        </>
+                    )}
+
+                    <div className="kp-node-section-label">Timestamps</div>
+                    {this.renderPlainField('Created', NodeViewer.formatTime(times.created) || '—', 'entry-created')}
+                    {this.renderPlainField('Modified', NodeViewer.formatTime(times.modified) || '—', 'entry-modified')}
+                    {this.renderPlainField('Accessed', NodeViewer.formatTime(times.accessed) || '—')}
+                    {typeof times.usage_count === 'number'
+                        && this.renderPlainField('Used', `${times.usage_count} time(s)`)}
+
+                    {history.length > 0 && (
+                        <>
+                            <div className="kp-node-section-label" data-testid="entry-history-label">
+                                Previous Versions ({history.length})
+                            </div>
+                            {history.map((old, i) => (
+                                <div className="kp-node-field" data-testid="entry-history" key={i}>
+                                    <span className="kp-node-field-label">
+                                        {NodeViewer.formatTime(old.modified) || `#${history.length - i}`}
+                                    </span>
+                                    <span className="kp-node-field-value">
+                                        {[old.title, old.username, old.url]
+                                            .filter(Boolean).join(' · ') || '—'}
+                                    </span>
+                                    <span className="kp-node-field-actions"/>
+                                </div>
+                            ))}
                         </>
                     )}
                 </div>

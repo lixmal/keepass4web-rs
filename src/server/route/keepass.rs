@@ -1,6 +1,7 @@
 use actix_session::Session;
 use actix_web::{delete, get, post, put, HttpResponse, Responder, web};
 use actix_web::web::Data;
+use chrono::{DateTime, NaiveDateTime};
 use log::info;
 use serde::Deserialize;
 use serde_json::json;
@@ -9,7 +10,7 @@ use uuid::Uuid;
 
 use crate::config::config::Config;
 use crate::keepass::db_cache::DbCache;
-use crate::keepass::keepass::{CustomField, File, Id, NotFoundError, Protected, SearchTerm};
+use crate::keepass::keepass::{CustomField, EntryFields, File, Id, NotFoundError, Protected, SearchTerm};
 use crate::server::route::util;
 use crate::session::AuthSession;
 
@@ -33,6 +34,10 @@ struct NewEntry {
     tags: String,
     #[serde(default)]
     fields: String,
+    #[serde(default)]
+    expires: bool,
+    #[serde(default)]
+    expiry: String,
 }
 
 #[derive(Deserialize)]
@@ -48,6 +53,10 @@ struct UpdateEntry {
     tags: String,
     #[serde(default)]
     fields: String,
+    #[serde(default)]
+    expires: bool,
+    #[serde(default)]
+    expiry: String,
 }
 
 // tags arrive as one comma separated field, the way the entry shows them
@@ -69,16 +78,48 @@ fn parse_custom_fields(fields: &str) -> Result<Vec<CustomField>, serde_json::Err
     serde_json::from_str(fields)
 }
 
+// The database keeps times in UTC, so an expiry arrives as an instant and is
+// stored as the UTC wall clock of that instant. A client that sent the reader's
+// local time instead would move the deadline by their offset from UTC.
+//
+// An entry that is marked as expiring has to say when.
+fn parse_expiry(expires: bool, expiry: &str) -> Result<Option<NaiveDateTime>, HttpResponse> {
+    let expiry = expiry.trim();
+
+    if expiry.is_empty() {
+        if expires {
+            return Err(bad_request("an entry that expires needs an expiry date"));
+        }
+        return Ok(None);
+    }
+
+    match DateTime::parse_from_rfc3339(expiry) {
+        Ok(parsed) => Ok(Some(parsed.naive_utc())),
+        Err(_) => Err(bad_request("the expiry date is not a date")),
+    }
+}
+
+fn bad_request(message: &str) -> HttpResponse {
+    HttpResponse::BadRequest().json(json!({
+        "success": false,
+        "message": message,
+    }))
+}
+
 #[derive(Deserialize)]
 struct NewGroup {
     parent_id: Uuid,
     title: String,
 }
 
+// A request that leaves notes out keeps the ones the group has, so a client
+// that only renames does not wipe them.
 #[derive(Deserialize)]
 struct RenameGroup {
     id: Uuid,
     title: String,
+    notes: Option<String>,
+    icon: Option<usize>,
 }
 
 // 404 for missing entries/groups/icons, 500 for everything else
@@ -318,18 +359,26 @@ async fn create_entry(session: Session, config: Data<Config>, db_cache: Data<DbC
         }
     };
 
+    let expiry = match parse_expiry(params.expires, &params.expiry) {
+        Ok(v) => v,
+        Err(err) => return err,
+    };
+
+    let fields = EntryFields {
+        title: &params.title,
+        username: &params.username,
+        password: &params.password,
+        url: &params.url,
+        notes: &params.notes,
+        icon: params.icon,
+        tags: &tags,
+        custom_fields: &custom_fields,
+        expires: params.expires,
+        expiry,
+    };
+
     if let Err(err) = util::modify_db(&session, &config, &db_cache, |kp| {
-        new_id = kp.create_entry(
-            &params.group_id,
-            &params.title,
-            &params.username,
-            &params.password,
-            &params.url,
-            &params.notes,
-            params.icon,
-            &tags,
-            &custom_fields,
-        )?;
+        new_id = kp.create_entry(&params.group_id, &fields)?;
         Ok(())
     }).await {
         return err;
@@ -355,18 +404,26 @@ async fn update_entry(session: Session, config: Data<Config>, db_cache: Data<DbC
         }
     };
 
+    let expiry = match parse_expiry(params.expires, &params.expiry) {
+        Ok(v) => v,
+        Err(err) => return err,
+    };
+
+    let fields = EntryFields {
+        title: &params.title,
+        username: &params.username,
+        password: &params.password,
+        url: &params.url,
+        notes: &params.notes,
+        icon: params.icon,
+        tags: &tags,
+        custom_fields: &custom_fields,
+        expires: params.expires,
+        expiry,
+    };
+
     if let Err(err) = util::modify_db(&session, &config, &db_cache, |kp| {
-        kp.update_entry(
-            &params.id,
-            &params.title,
-            &params.username,
-            &params.password,
-            &params.url,
-            &params.notes,
-            params.icon,
-            &tags,
-            &custom_fields,
-        )
+        kp.update_entry(&params.id, &fields)
     }).await {
         return err;
     }
@@ -396,7 +453,7 @@ async fn rename_group(session: Session, config: Data<Config>, db_cache: Data<DbC
     let username = session.get_user_id();
 
     if let Err(err) = util::modify_db(&session, &config, &db_cache, |kp| {
-        kp.rename_group(&params.id, &params.title)
+        kp.update_group(&params.id, &params.title, params.notes.as_deref(), params.icon)
     }).await {
         return err;
     }
@@ -481,6 +538,38 @@ mod tests {
 
         let err = anyhow::anyhow!("other");
         assert_eq!(error_response(&err, "msg").status(), 500);
+    }
+
+    // The database keeps times in UTC. An expiry that kept the sender's wall
+    // clock instead would move every deadline by their offset.
+    #[test]
+    fn an_expiry_is_stored_as_the_utc_instant_it_names() {
+        let utc = parse_expiry(true, "2020-01-02T03:04:00Z").unwrap().unwrap();
+        assert_eq!(utc.to_string(), "2020-01-02 03:04:00");
+
+        // the same instant, named from four hours behind utc
+        let offset = parse_expiry(true, "2020-01-01T23:04:00-04:00").unwrap().unwrap();
+        assert_eq!(offset, utc);
+
+        // and from two hours ahead of it
+        let ahead = parse_expiry(true, "2020-01-02T05:04:00+02:00").unwrap().unwrap();
+        assert_eq!(ahead, utc);
+    }
+
+    #[test]
+    fn an_entry_that_expires_needs_a_date() {
+        assert_eq!(parse_expiry(true, "").err().unwrap().status(), 400);
+        assert_eq!(parse_expiry(true, "   ").err().unwrap().status(), 400);
+
+        // not expiring and no date is the ordinary case
+        assert!(parse_expiry(false, "").unwrap().is_none());
+    }
+
+    #[test]
+    fn an_expiry_that_is_not_a_date_is_refused() {
+        assert_eq!(parse_expiry(true, "whenever").err().unwrap().status(), 400);
+        // a local wall clock carries no offset, so it cannot name an instant
+        assert_eq!(parse_expiry(true, "2020-01-02T03:04").err().unwrap().status(), 400);
     }
 }
 
