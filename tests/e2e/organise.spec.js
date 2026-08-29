@@ -153,5 +153,20 @@ test.describe('Entry details', () => {
 
     await expect(byId(page, 'entry-expired')).toBeVisible();
     await expect(byId(page, 'entry-expiry')).toContainText('2020');
+
+    // the date comes back as the wall clock that was typed: the database keeps
+    // times in UTC, so a deadline must not drift by the reader's offset
+    await page.getByRole('button', { name: 'Edit', exact: true }).click();
+    await expect(page.locator('#kp-f-expiry')).toHaveValue('2020-01-02T03:04');
+  });
+
+  test('refuses an entry marked as expiring with no date', async ({ page }) => {
+    await page.getByRole('button', { name: 'New Entry' }).click();
+    await page.locator('#kp-f-title').fill('no date');
+    await byId(page, 'entry-expires').check();
+
+    const saved = page.waitForResponse((r) => r.url().includes('/api/v1/entry'));
+    await page.getByRole('button', { name: 'Save Entry' }).click();
+    expect((await saved).status()).toBe(400);
   });
 });

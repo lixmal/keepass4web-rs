@@ -1,7 +1,7 @@
 use actix_session::Session;
 use actix_web::{delete, get, post, put, HttpResponse, Responder, web};
 use actix_web::web::Data;
-use chrono::NaiveDateTime;
+use chrono::{DateTime, NaiveDateTime};
 use log::info;
 use serde::Deserialize;
 use serde_json::json;
@@ -78,24 +78,32 @@ fn parse_custom_fields(fields: &str) -> Result<Vec<CustomField>, serde_json::Err
     serde_json::from_str(fields)
 }
 
-// An expiry date as the browser's datetime-local field writes it, which carries
-// no timezone and no seconds. Empty means the entry does not expire.
-fn parse_expiry(expiry: &str) -> Result<Option<NaiveDateTime>, HttpResponse> {
+// The database keeps times in UTC, so an expiry arrives as an instant and is
+// stored as the UTC wall clock of that instant. A client that sent the reader's
+// local time instead would move the deadline by their offset from UTC.
+//
+// An entry that is marked as expiring has to say when.
+fn parse_expiry(expires: bool, expiry: &str) -> Result<Option<NaiveDateTime>, HttpResponse> {
     let expiry = expiry.trim();
+
     if expiry.is_empty() {
+        if expires {
+            return Err(bad_request("an entry that expires needs an expiry date"));
+        }
         return Ok(None);
     }
 
-    for format in ["%Y-%m-%dT%H:%M:%S", "%Y-%m-%dT%H:%M"] {
-        if let Ok(parsed) = NaiveDateTime::parse_from_str(expiry, format) {
-            return Ok(Some(parsed));
-        }
+    match DateTime::parse_from_rfc3339(expiry) {
+        Ok(parsed) => Ok(Some(parsed.naive_utc())),
+        Err(_) => Err(bad_request("the expiry date is not a date")),
     }
+}
 
-    Err(HttpResponse::BadRequest().json(json!({
+fn bad_request(message: &str) -> HttpResponse {
+    HttpResponse::BadRequest().json(json!({
         "success": false,
-        "message": "the expiry date is not a date",
-    })))
+        "message": message,
+    }))
 }
 
 #[derive(Deserialize)]
@@ -351,7 +359,7 @@ async fn create_entry(session: Session, config: Data<Config>, db_cache: Data<DbC
         }
     };
 
-    let expiry = match parse_expiry(&params.expiry) {
+    let expiry = match parse_expiry(params.expires, &params.expiry) {
         Ok(v) => v,
         Err(err) => return err,
     };
@@ -396,7 +404,7 @@ async fn update_entry(session: Session, config: Data<Config>, db_cache: Data<DbC
         }
     };
 
-    let expiry = match parse_expiry(&params.expiry) {
+    let expiry = match parse_expiry(params.expires, &params.expiry) {
         Ok(v) => v,
         Err(err) => return err,
     };
@@ -530,6 +538,38 @@ mod tests {
 
         let err = anyhow::anyhow!("other");
         assert_eq!(error_response(&err, "msg").status(), 500);
+    }
+
+    // The database keeps times in UTC. An expiry that kept the sender's wall
+    // clock instead would move every deadline by their offset.
+    #[test]
+    fn an_expiry_is_stored_as_the_utc_instant_it_names() {
+        let utc = parse_expiry(true, "2020-01-02T03:04:00Z").unwrap().unwrap();
+        assert_eq!(utc.to_string(), "2020-01-02 03:04:00");
+
+        // the same instant, named from four hours behind utc
+        let offset = parse_expiry(true, "2020-01-01T23:04:00-04:00").unwrap().unwrap();
+        assert_eq!(offset, utc);
+
+        // and from two hours ahead of it
+        let ahead = parse_expiry(true, "2020-01-02T05:04:00+02:00").unwrap().unwrap();
+        assert_eq!(ahead, utc);
+    }
+
+    #[test]
+    fn an_entry_that_expires_needs_a_date() {
+        assert_eq!(parse_expiry(true, "").err().unwrap().status(), 400);
+        assert_eq!(parse_expiry(true, "   ").err().unwrap().status(), 400);
+
+        // not expiring and no date is the ordinary case
+        assert!(parse_expiry(false, "").unwrap().is_none());
+    }
+
+    #[test]
+    fn an_expiry_that_is_not_a_date_is_refused() {
+        assert_eq!(parse_expiry(true, "whenever").err().unwrap().status(), 400);
+        // a local wall clock carries no offset, so it cannot name an instant
+        assert_eq!(parse_expiry(true, "2020-01-02T03:04").err().unwrap().status(), 400);
     }
 }
 

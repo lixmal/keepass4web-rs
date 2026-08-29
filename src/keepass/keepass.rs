@@ -457,6 +457,7 @@ impl KeePass {
         Ok(())
     }
 
+    #[cfg(test)]
     pub fn attachment_count(&self) -> usize {
         self.db.num_attachments()
     }

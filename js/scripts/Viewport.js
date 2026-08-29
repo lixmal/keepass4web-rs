@@ -171,12 +171,20 @@ class Viewport extends React.Component {
 
     // ── Entry mutations ───────────────────────────────────────────
 
+    // The answer is only good for the group it was asked about: if the user
+    // has moved on by the time it lands, showing it would put the old group
+    // back in the panel.
     refreshGroup() {
         if (!this.state.group || !this.state.group.id) return
+
+        const asked = this.state.group.id
         KeePass4Web.fetch('get_group_entries', {
             method: 'GET',
-            data: { id: this.state.group.id },
-            success: (data) => this.setState({ group: data }),
+            data: { id: asked },
+            success: (data) => {
+                if (!this.state.group || this.state.group.id !== asked) return
+                this.setState({ group: data })
+            },
             error: KeePass4Web.error.bind(this),
         })
     }

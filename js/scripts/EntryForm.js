@@ -39,6 +39,18 @@ function customFieldsOf(entry) {
     }))
 }
 
+// The database keeps times in UTC, so the wall clock the user typed is turned
+// into an instant before it is sent. Sending it as it stands would move every
+// deadline by the reader's offset from UTC.
+function expiryToUtc(value) {
+    if (!value) return ''
+
+    const date = new Date(value)
+    if (isNaN(date.getTime())) return ''
+
+    return date.toISOString()
+}
+
 // the datetime-local input wants "YYYY-MM-DDTHH:MM" in local time, while the
 // entry carries an instant
 function expiryInputValue(entry) {
@@ -162,6 +174,7 @@ class EntryForm extends React.Component {
 
         const payload = { ...form }
         if (payload.icon === null) delete payload.icon
+        payload.expiry = form.expires ? expiryToUtc(form.expiry) : ''
         // a form encoded body cannot carry a list, so the custom fields travel
         // as json, and a field without a name is one the user never filled in
         payload.fields = JSON.stringify(
