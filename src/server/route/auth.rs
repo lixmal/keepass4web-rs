@@ -404,7 +404,7 @@ async fn save_db(session: Session, config: Data<Config>, db_cache: Data<DbCache>
     // needs, leaving it open to the password alone and locking out the person
     // who still presents the key file. Opening it with them first is what says
     // they are the same credentials.
-    if let Err(err) = KeePass::from_backend(&config, db_backend.as_mut(), &params, &user_info).await {
+    if let Err(err) = KeePass::key_opens_stored(db_backend.as_ref(), &params, &user_info).await {
         info!("save_db from '{}': the credentials do not open the stored database: {}", username, err);
         return HttpResponse::Unauthorized().json(json!({
             "success": false,

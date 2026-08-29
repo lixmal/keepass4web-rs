@@ -113,6 +113,29 @@ test.describe('A database that needs a key file', () => {
     expect(opens(true)).toBe(true);
   });
 
+  // A database that is not there cannot vouch for any credentials. Creating
+  // one to check against would accept all of them, so the save is refused.
+  test('refuses a save when the stored database has gone missing', async ({ page }) => {
+    await unlock(page);
+    fs.rmSync(DB);
+
+    const refused = await page.evaluate(async () => {
+      const response = await fetch('api/v1/save_db', {
+        method: 'POST',
+        headers: {
+          'X-CSRF-Token': localStorage.getItem('CSRFToken'),
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: 'password=not-the-master-password',
+      });
+      return response.status;
+    });
+
+    expect(refused).toBe(401);
+    // and nothing was written in its place
+    expect(fs.existsSync(DB)).toBe(false);
+  });
+
   test('saves when the key file is given again', async ({ page }) => {
     await unlock(page);
 

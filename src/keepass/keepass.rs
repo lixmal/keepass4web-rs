@@ -150,6 +150,33 @@ impl KeePass {
         Encrypted::encrypt(ser_db, &[], self.config.db_session_timeout)
     }
 
+    /// Whether these credentials open the database that is currently stored.
+    ///
+    /// Saving re-encrypts the database with whatever it is given, so this is
+    /// what says the credentials are the ones the database already has rather
+    /// than new ones that would replace them.
+    ///
+    /// Unlike [`Self::from_backend`] this never writes: a database that is not
+    /// there cannot vouch for anything, and creating one to check against
+    /// would accept any credentials at all.
+    pub async fn key_opens_stored(db_backend: &dyn DbBackend, params: &DbLogin, user_info: &UserInfo) -> Result<()> {
+        let db_key = Self::db_key_from_params(db_backend, params, user_info).await?;
+
+        let mut buf = vec![];
+        {
+            let mut reader = db_backend.get_db_read(user_info).await?;
+            reader.read_to_end(&mut buf).await?;
+        }
+
+        tokio::task::spawn_blocking(move || {
+            let result = Database::open(&mut buf.as_slice(), db_key);
+            buf.zeroize();
+            result
+        }).await??;
+
+        Ok(())
+    }
+
     pub async fn from_backend(config: &Config, db_backend: &mut dyn DbBackend, params: &DbLogin, user_info: &UserInfo) -> Result<Self> {
         let db_key = Self::db_key_from_params(db_backend, params, user_info).await?;
 
