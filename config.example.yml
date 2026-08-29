@@ -25,6 +25,39 @@ db_backend: 'Filesystem'
 auth_backend: 'htpasswd'
 
 
+### Configuring from the environment ###
+#
+# Every setting below can also be given as an environment variable, which is
+# what to reach for when the configuration is deployed separately from the
+# secrets, or when there is to be no file at all. Take the name of the setting,
+# put KEEPASS4WEB_ in front of it, and step into a section with two
+# underscores:
+#
+#   listen: '::'              ->  KEEPASS4WEB_LISTEN='::'
+#   port: 8080                ->  KEEPASS4WEB_PORT=8080
+#   db_session_timeout        ->  KEEPASS4WEB_DB_SESSION_TIMEOUT='45 minutes'
+#   LDAP: { base_dn: ... }    ->  KEEPASS4WEB_LDAP__BASE_DN='ou=users,dc=example,dc=org'
+#   OIDC: { client_secret }   ->  KEEPASS4WEB_OIDC__CLIENT_SECRET='...'
+#
+# One underscore is part of a name, two step into a section, so
+# KEEPASS4WEB_DB_SESSION_TIMEOUT is the top-level setting and
+# KEEPASS4WEB_LDAP__BASE_DN is base_dn inside LDAP.
+#
+# A variable replaces whatever the file said. The file may be left out entirely
+# — if config.yml is not there and no --config was given, the environment and
+# the defaults are all that is used.
+#
+# Values are taken literally, so a secret of '12345', 'yes' or '[redacted]'
+# stays that text and is not read as a number, a boolean or a list. The
+# settings that are lists accept either form:
+#
+#   KEEPASS4WEB_SEARCH__FIELDS='[title, username, url]'
+#   KEEPASS4WEB_SEARCH__FIELDS='title, username, url'
+#   KEEPASS4WEB_OIDC__SCOPES='profile'
+#
+# Variables set a value; they cannot remove one the file set. An empty variable
+# is an empty string, which is what an anonymous LDAP bind wants.
+
 ### Database backends ###
 
 # db_backend: Filesystem

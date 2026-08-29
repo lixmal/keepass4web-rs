@@ -1,3 +1,4 @@
+pub mod env;
 pub mod config;
 pub mod ldap;
 pub mod filesystem;

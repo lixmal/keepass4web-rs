@@ -13,8 +13,11 @@ pub enum Field {
 #[derive(Clone, Deserialize)]
 #[serde(default)]
 pub struct Search {
+    #[serde(deserialize_with = "crate::config::env::list")]
     pub fields: Vec<Field>,
+    #[serde(deserialize_with = "crate::config::env::scalar")]
     pub extra_fields: bool,
+    #[serde(deserialize_with = "crate::config::env::scalar")]
     pub allow_regex: bool,
 }
 
