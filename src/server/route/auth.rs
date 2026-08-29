@@ -14,7 +14,7 @@ use crate::keepass::db_cache::DbCache;
 use crate::keepass::keepass::KeePass;
 use crate::rate_limit::RateLimiter;
 use crate::server::route::INDEX_FILE;
-use crate::server::route::util::{_close_db, check_user_session, db_is_open, get_db, revoke_key, set_user_session, store_key};
+use crate::server::route::util::{_close_db, check_user_session, db_is_open, get_db, revoke_key, set_user_session, store_key, SESSION_KEY_USED_KEYFILE};
 use crate::session::AuthSession;
 
 #[derive(Serialize)]
@@ -44,6 +44,8 @@ async fn authenticated(session: Session, config: Data<Config>, db_cache: Data<Db
         "data": {
             "backend": backend,
             "db": db,
+            // so the save form knows to ask for the key file again
+            "used_keyfile": session.get::<bool>(SESSION_KEY_USED_KEYFILE).ok().flatten().unwrap_or(false),
         },
     });
 
@@ -225,6 +227,20 @@ async fn db_login(request: HttpRequest, session: Session, config: Data<Config>, 
 
     rate_limiter.success(&rate_key).await;
 
+    // Remembered so the client can ask for the key file again when the
+    // database is saved: the same credentials have to be presented, and a save
+    // form that only asked for a password would be a dead end for anyone whose
+    // database needs a file as well. The file itself is not kept.
+    if let Err(err) = session.insert(SESSION_KEY_USED_KEYFILE, params.key.is_some()) {
+        error!("db login from '{}': failed to record the key file use: {}", username, err);
+        return HttpResponse::InternalServerError().json(json!(
+            {
+                "success": false,
+                "message": "failed to store session",
+            }
+        ));
+    }
+
     let (key, enc_db) = match db.to_enc() {
         Ok(v) => v,
         Err(err) => {
@@ -381,6 +397,20 @@ async fn save_db(session: Session, config: Data<Config>, db_cache: Data<DbCache>
             }));
         }
     };
+
+    // The save re-encrypts the database with whatever was sent, so credentials
+    // that do not open the stored database would quietly replace the ones that
+    // do: saving with only a password would drop the key file the database
+    // needs, leaving it open to the password alone and locking out the person
+    // who still presents the key file. Opening it with them first is what says
+    // they are the same credentials.
+    if let Err(err) = KeePass::from_backend(&config, db_backend.as_mut(), &params, &user_info).await {
+        info!("save_db from '{}': the credentials do not open the stored database: {}", username, err);
+        return HttpResponse::Unauthorized().json(json!({
+            "success": false,
+            "message": "the master password and key file must be the ones the database was opened with",
+        }));
+    }
 
     if let Err(err) = keepass.to_backend_with_key(db_backend.as_mut(), db_key, &user_info).await {
         error!("save_db from '{}': {}", username, err);

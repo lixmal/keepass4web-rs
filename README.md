@@ -68,13 +68,10 @@ The minified, bundled file will be written to public/scripts/bundle.js
 - Install js modules
   > npm install
 
-- Copy bootstrap font files
-  > cp node_modules/bootstrap/fonts/* public/fonts/
-
 - Build js bundle
   > npm run build
 
-- For a non-uglified version you can run
+- For an unminified version you can run
   > npm run dev
 
 ## CONFIGURATION
