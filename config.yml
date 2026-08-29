@@ -47,6 +47,9 @@ htpasswd:
 ### General settings ###
 
 # Time before the database is automatically closed (user idle timeout).
+# Durations are a number and a unit, repeated as needed: '30s', '45min',
+# '2h 30m', '1 week'. See config.example.yml for what to weigh when changing
+# this and session_lifetime.
 db_session_timeout: '10 minutes'
 
 # How often to re-check whether the auth backend has changed.

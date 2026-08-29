@@ -86,15 +86,91 @@ jobs:
       - uses: actions/checkout@v7
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
+
       # the image is only built when it is pushed to the registry, so a broken
-      # Dockerfile would otherwise surface after a change reached master
+      # Dockerfile would otherwise surface after a change reached master.
+      # loaded into the daemon rather than discarded, so the steps below can
+      # actually run the thing that was built
       - name: Build the image
         uses: docker/build-push-action@263435318d21b8e681c14492fe198d362a7d2c83
         with:
           context: .
+          platforms: linux/amd64
+          load: true
+          tags: keepass4web-rs:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # the published image is a two-platform manifest, but only amd64 is built
+      # above. arm64 is the half that goes through the cross-compilation path,
+      # where an unpinned helper image or a toolchain the build never installed
+      # stays invisible on the native target
+      - name: Build the image for arm64
+        uses: docker/build-push-action@263435318d21b8e681c14492fe198d362a7d2c83
+        with:
+          context: .
+          platforms: linux/arm64
           push: false
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+      # AES-NI and SSE are picked per target triple, and losing them costs every
+      # unlock without breaking the build. the build stage runs on the host
+      # platform, so its record of the selected flags can just be read back
+      - name: Export the amd64 build stage
+        uses: docker/build-push-action@263435318d21b8e681c14492fe198d362a7d2c83
+        with:
+          context: .
+          target: build
+          platforms: linux/amd64
+          load: true
+          tags: keepass4web-rs:build-amd64
+          cache-from: type=gha
+
+      - name: The amd64 build keeps its AES-NI and SSE flags
+        run: |
+          flags=$(docker run --rm --entrypoint /bin/cat keepass4web-rs:build-amd64 /rustflags)
+          echo "amd64 rustflags: $flags"
+          case "$flags" in
+            *+aes*) ;;
+            *) echo "::error::the amd64 build lost its AES-NI flags"; exit 1 ;;
+          esac
+
+      - name: The image serves /health
+        run: |
+          docker run -d --name k4w -p 8080:8080 keepass4web-rs:ci
+          for _ in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:8080/health >/dev/null 2>&1; then break; fi
+            sleep 1
+          done
+          body=$(curl -fsS http://127.0.0.1:8080/health)
+          echo "GET /health -> $body"
+          echo "$body" | grep -q '"status":"ok"'
+
+      # the flag the HEALTHCHECK runs. the image has no shell or curl, so a
+      # probe that cannot reach the server would only show up as an image that
+      # never turns healthy
+      - name: The bundled health probe agrees
+        run: docker exec k4w /keepass4web --config /conf/config.yml --health-check
+
+      - name: Docker reports the container healthy
+        run: |
+          for _ in $(seq 1 60); do
+            status=$(docker inspect --format '{{.State.Health.Status}}' k4w)
+            case "$status" in
+              healthy)   echo "container is healthy"; exit 0 ;;
+              unhealthy) echo "::error::container reported unhealthy"; docker logs k4w; exit 1 ;;
+            esac
+            sleep 2
+          done
+          echo "::error::container never became healthy"
+          docker inspect --format '{{json .State.Health}}' k4w
+          docker logs k4w
+          exit 1
+
+      - name: Container logs
+        if: always()
+        run: docker logs k4w || true
 
   dependency-review:
     name: Dependency Review

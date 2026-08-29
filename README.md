@@ -10,6 +10,10 @@
   - [DEPLOYMENT](#deployment)
     - [Container](#container)
     - [Docker Compose](#docker-compose)
+      - [Which file holds what](#which-file-holds-what)
+      - [LDAP, against the bundled OpenLDAP](#ldap-against-the-bundled-openldap)
+      - [OIDC, against the bundled Keycloak](#oidc-against-the-bundled-keycloak)
+    - [TLS](#tls)
     - [Classic](#classic)
   - [BACKENDS](#backends)
     - [Authentication Backends](#authentication-backends)
@@ -75,7 +79,28 @@ The minified, bundled file will be written to public/scripts/bundle.js
 
 ## CONFIGURATION
 
-- See `config.yml`, and [config.example.yml](config.example.yml) for every option with its comment
+`config.yml` is the configuration the app starts with, and the container ships it at `/conf/config.yml`.
+It is deliberately short: the filesystem database backend, no authentication backend, and the general
+settings every deployment needs.
+
+[config.example.yml](config.example.yml) is the reference. It documents every option and carries
+ready-to-paste blocks for each authentication backend, filled in with values that match the optional
+test services in [docker-compose.yml](docker-compose.yml), so a backend can be tried without inventing
+any settings first.
+
+Two options are worth knowing about before deploying:
+
+- `use_keyring` — set it to `false` where the kernel keyring is unavailable, which includes Docker
+  Desktop on macOS and Windows, whose default seccomp profile blocks the `keyctl`, `add_key` and
+  `request_key` syscalls. See [Container](#container) for what is given up.
+- `trust_proxy_headers` — leave it `false` unless the app sits behind a reverse proxy that you control
+  and that sets `Forwarded` or `X-Forwarded-For`. It decides whether those headers are believed when
+  the client address is worked out for login rate limiting; anyone can send them otherwise, and the
+  rate limit is then trivially evaded.
+
+Editing `config.yml` means changing the keys that are already in it. Appending a second `auth_backend:`
+or `cookie_samesite:` line rather than editing the existing one makes the file invalid and the app
+refuses to start with `duplicate field`.
 
 Any setting can be given as an environment variable instead, for deployments that keep the
 configuration and the secrets apart. Prefix the name of the setting with `KEEPASS4WEB_`, and step into
@@ -166,32 +191,199 @@ Example podman:
 
 ### Docker Compose
 
-For easier deployment, you can use Docker Compose file
+[docker-compose.yml](docker-compose.yml) starts the app on its own, and carries two optional services —
+OpenLDAP and Keycloak — for trying the LDAP and OIDC backends without standing anything up yourself.
+Both are commented out.
 
-Then, to start the container run:
+Ports, credentials and the Keycloak URL come from the environment rather than being written into the
+compose file. [.env.example](.env.example) holds throwaway values for local testing:
 
-
+```bash
+cp .env.example .env      # docker compose picks .env up automatically
 ```
-docker-compose up -d
 
+To start the app by itself:
+
+```bash
+docker compose up -d
 ```
 
-To stop the container:
+It listens on `${APP_PORT}` (8080 by default), and the bundled `tests/test.kdbx` opens with the master
+password `test`. To stop it:
 
+```bash
+docker compose down
 ```
-docker-compose down
+
+Enabling one of the auth services is three steps: copy `.env.example` as above, uncomment the service
+block you want in `docker-compose.yml`, and point `config.yml` at it. The two sections below do the
+last step; the compose file repeats the same settings next to each service.
+
+#### Which file holds what
+
+Two files are involved, because two programs are being configured. `.env` sets up the test service —
+what OpenLDAP is seeded with, which ports are published, which URL Keycloak announces itself on.
+`config.yml` tells the app how to talk to it. Neither is optional for the test services, and
+`config.yml` does no variable expansion, so where the two overlap the value has to be written out in
+both by hand:
+
+| `.env`                                    | sets                                | copy into `config.yml` as                       |
+|-------------------------------------------|-------------------------------------|-------------------------------------------------|
+| `APP_PORT`                                | port the app is published on        | —                                               |
+| `LDAP_ROOT`                               | root of the directory tree          | part of `base_dn` and `bind`                    |
+| `LDAP_ADMIN_USERNAME` / `LDAP_ADMIN_PASSWORD` | the directory administrator     | `bind` and `password`                           |
+| `LDAP_TEST_USER` / `LDAP_TEST_PASSWORD`   | a user to log in as                 | — (typed at the login form)                     |
+| `LDAP_PORT`                               | published LDAP port                 | `uri`, only outside compose                     |
+| `KC_PUBLIC_URL`                           | Keycloak's `--hostname`             | the host part of `issuer`                       |
+| `KC_PORT`                                 | published Keycloak port             | — (keep it equal to the port in `KC_PUBLIC_URL`)|
+| `OIDC_REALM`                              | realm imported from `realm.json`    | the realm in `issuer` and `discovery_url`       |
+| `OIDC_CLIENT_ID` / `OIDC_CLIENT_SECRET`   | the client in `realm.json`          | `client_id` and `client_secret`                 |
+| `KC_ADMIN_USERNAME` / `KC_ADMIN_PASSWORD` | admin console login                 | — (the app never uses it)                       |
+
+Two of these do not follow the variable. `OIDC_REALM`, `OIDC_CLIENT_ID` and `OIDC_CLIENT_SECRET`
+describe what [tests/keycloak/realm.json](tests/keycloak/realm.json) already contains rather than
+setting it, and the client's redirect URI in that file is fixed at port 8080; changing either means
+editing the realm file too.
+
+For a real deployment none of this applies — there is no `.env`, and `config.yml` is the only file,
+with [config.example.yml](config.example.yml) as the reference for it.
+
+#### LDAP, against the bundled OpenLDAP
+
+Uncomment the `openldap` block in `docker-compose.yml`. It is seeded with the user from `.env`
+(`LDAP_TEST_USER` / `LDAP_TEST_PASSWORD`, `testuser` / `testpass` by default).
+
+In `config.yml`, change the existing `auth_backend` line and add the `LDAP` block:
+
+```yaml
+auth_backend: 'LDAP'
+
+LDAP:
+  uri: 'ldap://openldap:1389'
+  scope: 'subtree'
+  base_dn: 'ou=users,dc=example,dc=org'
+  filter: '(objectClass=inetOrgPerson)'
+  login_attribute: 'uid'
+  bind: 'cn=admin,dc=example,dc=org'
+  password: 'adminpassword'
 ```
+
+Then `docker compose up -d` and log in as `testuser`. Running the app outside compose, the server is
+reachable on the host instead: `ldap://127.0.0.1:${LDAP_PORT}`.
+
+`base_dn`, `bind` and `password` follow `LDAP_ROOT`, `LDAP_ADMIN_USERNAME` and `LDAP_ADMIN_PASSWORD`
+from `.env`; change them there and these three have to match.
+
+To let only some of the directory in, put a group check in `filter` — it is combined with the login
+attribute match, so a user has to satisfy both:
+
+```yaml
+  filter: '(&(objectClass=inetOrgPerson)(memberOf=cn=keepass,ou=groups,dc=example,dc=org))'
+```
+
+That is as far as it goes: the filter decides who may log in, and everyone who does gets the same
+access. There are no roles and no administrators — nothing distinguishes one logged-in user from
+another. What can differ per user is the database they are handed: `database_attribute` and
+`keyfile_attribute` read the location from an attribute on the user's own entry, so members of the
+same group can still be pointed at separate databases.
+
+Active Directory, per-user database locations and the remaining options are covered in
+[config.example.yml](config.example.yml).
+
+#### OIDC, against the bundled Keycloak
+
+Uncomment the `keycloak` block. The `keepass` realm is imported on startup from
+[tests/keycloak/realm.json](tests/keycloak/realm.json): a confidential client `keepass4web`, the
+redirect URI `http://localhost:8080/callback_user_auth`, and the user `testuser` / `testpass`. That
+URI is baked into the realm file rather than read from the environment, so raising `APP_PORT` means
+editing it there too, or Keycloak rejects the login.
+The admin console is at `${KC_PUBLIC_URL}` with `KC_ADMIN_USERNAME` / `KC_ADMIN_PASSWORD`.
+
+The browser and the app reach Keycloak at two different addresses — the browser at `${KC_PUBLIC_URL}`,
+the app at the compose service name — so both are configured:
+
+```yaml
+auth_backend: 'OIDC'
+
+# the redirect flow needs the session cookie to survive the return trip
+cookie_samesite: 'lax'
+
+OIDC:
+  # what the browser is sent to, and what tokens are trusted against
+  issuer: 'http://localhost:8081/realms/keepass'
+  # where the app reads the metadata, over the compose network
+  discovery_url: 'http://keycloak:8080/realms/keepass/.well-known/openid-configuration'
+  client_id: 'keepass4web'
+  client_secret: 'insecure-example-client-secret'
+  save_id_token: true
+  scopes:
+    - 'profile'
+```
+
+`auth_backend` and `cookie_samesite` already exist in `config.yml` — change those lines rather than
+adding second ones.
+
+Keycloak is started with `--hostname=${KC_PUBLIC_URL}` so it names the same issuer no matter which
+address it was asked on. The app fetches the document over the internal address and points the
+endpoints it calls itself — token, JWKS, userinfo — back at that internal address, while leaving the
+ones the browser is redirected to on the public URL. Without `discovery_url` the app would advertise
+the compose service name to the browser, which cannot resolve it.
+
+Give Keycloak half a minute on the first start, then open `http://localhost:${APP_PORT}` and log in as
+`testuser`.
+
+Running the app outside compose, drop `discovery_url` altogether: the browser and the app then share
+`${KC_PUBLIC_URL}` and there is nothing to split.
+
+### TLS
+
+The app speaks plain HTTP and has no TLS listener: `listen` and `port` are handed straight to the
+server, and there is nowhere to give it a certificate. Anything reachable beyond localhost belongs
+behind a reverse proxy that terminates TLS, because the master password and the entries themselves
+cross that connection.
+
+Two settings follow from that:
+
+- `cookie_samesite` — the session cookie is not marked `Secure` by the app, so the proxy is what keeps
+  it off plaintext. `strict` is the default; a redirecting auth backend such as OIDC needs `lax`, since
+  the cookie has to survive the return trip from the provider.
+- `trust_proxy_headers` — off by default, and it should stay off until the proxy is in place. It
+  decides whether `Forwarded` and `X-Forwarded-For` are believed when the client address is determined
+  for login rate limiting. Without a proxy every request appears to come from the proxy's address and
+  one attacker's failures would rate limit everyone; with it enabled and no proxy, anyone can spoof the
+  header and never be rate limited at all.
+
+Connections the app makes outwards are TLS-verified and cannot be told to skip verification:
+
+- LDAP over `ldaps://`, and `ldapi://` for a local socket, are accepted alongside `ldap://`. Certificates
+  are checked against the system trust store, so a private CA has to be installed in the image or the
+  host the app runs on.
+- OIDC and the HTTP database backend verify against a **bundled** root store rather than the system one.
+  A certificate signed by a private or corporate CA is rejected there even when that CA is trusted by
+  the host, so an internal provider needs a publicly trusted certificate, or the connection to it has to
+  stay inside a network you trust.
+
+The bundled Keycloak and OpenLDAP services are plain HTTP and LDAP. They exist to exercise the login
+flows on a laptop, not to model a deployment.
 
 ### Classic
 
 This requires rust installed, compile the binary:
 
-    export RUSTFLAGS="-Ctarget-cpu=sandybridge -Ctarget-feature=+aes,+sse2,+sse4.1,+ssse3"
-    cargo build --bins --release --target-dir release
+    cargo build --bins --release
 
 Run the binary:
 
     target/release/keepass4web-rs
+
+On x86 the key derivation and the database crypto are noticeably faster with AES-NI and SSE, which are
+not in the default baseline. The flags only exist on that architecture, so set them there and nowhere
+else — on aarch64 they fail the build:
+
+    export RUSTFLAGS="-Ctarget-cpu=sandybridge -Ctarget-feature=+aes,+sse2,+sse4.1,+ssse3"
+
+The container image does the same thing per target triple, so its published amd64 build carries them
+and the arm64 one does not.
 
 ## BACKENDS
 

@@ -6,7 +6,7 @@ use base64::Engine;
 use base64::engine::general_purpose;
 use keepass::{Database, DatabaseKey};
 use keepass::config::DatabaseConfig;
-use keepass::db::{Entry as KpEntry, Group as KpGroup, Icon, Node, Value};
+use keepass::db::{CustomIcon, EntryId, GroupId, GroupRef, Icon, Value};
 use regex::Regex;
 use secrecy::{ExposeSecret, SecretString};
 use serde::Deserialize;
@@ -17,7 +17,6 @@ use zeroize::Zeroize;
 use crate::auth::DbLogin;
 use crate::auth_backend::UserInfo;
 use crate::config::config::Config;
-use crate::config::search::Search;
 use crate::db_backend::DbBackend;
 use crate::keepass::encrypted::Encrypted;
 use crate::keepass::entry::{
@@ -43,6 +42,10 @@ impl std::error::Error for NotFoundError {}
 // the fields the format defines: everything else on an entry is a custom field
 // the user added and is theirs to name
 const STANDARD_FIELDS: [&str; 5] = ["Title", "UserName", "Password", "URL", "Notes"];
+
+// what clients call the recycle bin, and the bin icon from the standard set
+const RECYCLE_BIN_NAME: &str = "Recycle Bin";
+const RECYCLE_BIN_ICON: usize = 43;
 
 // a field the user added to an entry, protected ones hidden from the client
 // until they ask for them
@@ -144,7 +147,7 @@ impl KeePass {
     }
 
     async fn create_new(config: &Config, db_backend: &mut dyn DbBackend, db_key: DatabaseKey, user_info: &UserInfo) -> Result<Self> {
-        let db = Database::new(DatabaseConfig::default());
+        let db = Database::with_config(DatabaseConfig::default());
 
         let mut buf: Vec<u8> = vec![];
         let (result, mut buf, db) = tokio::task::spawn_blocking(move || {
@@ -207,24 +210,24 @@ impl KeePass {
         tags: &[String],
         custom_fields: &[CustomField],
     ) -> Result<Uuid> {
-        let group = Self::find_group_by_id_mut(&mut self.db.root, group_id)
-            .ok_or(NotFoundError("group"))?;
+        let group_id = GroupId::from_uuid(*group_id);
+        let mut group = self.db.group_mut(group_id).ok_or(NotFoundError("group"))?;
 
-        let mut entry = KpEntry::new();
-        entry.fields.insert("Title".to_string(), Value::Unprotected(title.to_string()));
-        entry.fields.insert("UserName".to_string(), Value::Unprotected(username.to_string()));
+        let mut entry = group.add_entry();
+        entry.set_unprotected("Title", title);
+        entry.set_unprotected("UserName", username);
         if !password.is_empty() {
-            entry.fields.insert("Password".to_string(), Value::Protected(password.as_bytes().into()));
+            entry.set_protected("Password", password);
         }
-        entry.fields.insert("URL".to_string(), Value::Unprotected(url.to_string()));
-        entry.fields.insert("Notes".to_string(), Value::Unprotected(notes.to_string()));
-        entry.icon_id = icon;
+        entry.set_unprotected("URL", url);
+        entry.set_unprotected("Notes", notes);
+        if let Some(id) = icon {
+            entry.set_icon_builtin(id);
+        }
         entry.tags = tags.to_vec();
         Self::apply_custom_fields(&mut entry, custom_fields);
 
-        let uuid = entry.uuid;
-        group.add_child(entry);
-        Ok(uuid)
+        Ok(entry.id().uuid())
     }
 
     pub fn update_entry(
@@ -239,22 +242,27 @@ impl KeePass {
         tags: &[String],
         custom_fields: &[CustomField],
     ) -> Result<()> {
-        let entry = Self::find_entry_by_id_mut(&mut self.db.root, entry_id)
-            .ok_or(NotFoundError("entry"))?;
+        let entry_id = EntryId::from_uuid(*entry_id);
+        let mut entry = self.db.entry_mut(entry_id).ok_or(NotFoundError("entry"))?;
 
-        entry.fields.insert("Title".to_string(), Value::Unprotected(title.to_string()));
-        entry.fields.insert("UserName".to_string(), Value::Unprotected(username.to_string()));
-        if !password.is_empty() {
-            entry.fields.insert("Password".to_string(), Value::Protected(password.as_bytes().into()));
-        }
-        entry.fields.insert("URL".to_string(), Value::Unprotected(url.to_string()));
-        entry.fields.insert("Notes".to_string(), Value::Unprotected(notes.to_string()));
-        if let Some(id) = icon {
-            entry.icon_id = Some(id);
-        }
+        // editing through a tracked reference keeps the previous version in the
+        // entry's history, the way every other client records an edit
+        entry.edit_tracking(|entry| {
+            entry.set_unprotected("Title", title);
+            entry.set_unprotected("UserName", username);
+            if !password.is_empty() {
+                entry.set_protected("Password", password);
+            }
+            entry.set_unprotected("URL", url);
+            entry.set_unprotected("Notes", notes);
+            if let Some(id) = icon {
+                entry.set_icon_builtin(id);
+            }
 
-        entry.tags = tags.to_vec();
-        Self::apply_custom_fields(entry, custom_fields);
+            let mut entry = entry.as_mut();
+            entry.tags = tags.to_vec();
+            Self::apply_custom_fields(&mut entry, custom_fields);
+        });
 
         Ok(())
     }
@@ -264,16 +272,16 @@ impl KeePass {
     // request carries. A protected field sent without a value keeps the value
     // it has, the same way an empty password leaves the password alone: the
     // client never received it to send back.
-    fn apply_custom_fields(entry: &mut keepass::db::Entry, custom_fields: &[CustomField]) {
-        let kept: Vec<(String, Value)> = custom_fields.iter()
+    fn apply_custom_fields(entry: &mut keepass::db::EntryMut<'_>, custom_fields: &[CustomField]) {
+        let kept: Vec<(String, Value<String>)> = custom_fields.iter()
             .map(|field| {
                 let value = match (field.protected, field.value.is_empty()) {
                     (true, true) => match entry.fields.get(&field.name) {
-                        Some(Value::Protected(existing)) => Value::Protected(existing.unsecure().into()),
-                        _ => Value::Protected(field.value.as_bytes().into()),
+                        Some(existing) if existing.is_protected() => Value::protected(existing.get().clone()),
+                        _ => Value::protected(field.value.clone()),
                     },
-                    (true, false) => Value::Protected(field.value.as_bytes().into()),
-                    (false, _) => Value::Unprotected(field.value.clone()),
+                    (true, false) => Value::protected(field.value.clone()),
+                    (false, _) => Value::unprotected(field.value.clone()),
                 };
 
                 (field.name.clone(), value)
@@ -282,63 +290,190 @@ impl KeePass {
 
         entry.fields.retain(|name, _| STANDARD_FIELDS.contains(&name.as_str()));
         for (name, value) in kept {
-            entry.fields.insert(name, value);
+            entry.set(name, value);
         }
     }
 
     pub fn create_group(&mut self, parent_id: &Uuid, name: &str) -> Result<Uuid> {
-        // Root accepts unlimited groups. Non-root groups are capped at 2 subgroups,
-        // which also blocks nesting beyond one level below root.
-        if *parent_id != self.db.root.uuid {
-            let parent = Self::find_group_by_id(&self.db.root, parent_id)
-                .ok_or(NotFoundError("group"))?;
-            let subgroup_count = parent.children.iter()
-                .filter(|n| matches!(n, Node::Group(_)))
-                .count();
-            if subgroup_count >= 2 {
-                return Err(anyhow!("a group may have at most 2 subgroups"));
-            }
-        }
+        let parent_id = GroupId::from_uuid(*parent_id);
+        let mut parent = self.db.group_mut(parent_id).ok_or(NotFoundError("group"))?;
 
-        let parent = Self::find_group_by_id_mut(&mut self.db.root, parent_id)
-            .ok_or(NotFoundError("group"))?;
-        let group = KpGroup::new(name);
-        let id = group.uuid;
-        parent.children.push(Node::Group(group));
-        Ok(id)
+        let mut group = parent.add_group();
+        group.name = name.to_string();
+
+        Ok(group.id().uuid())
     }
 
     pub fn rename_group(&mut self, group_id: &Uuid, name: &str) -> Result<()> {
-        let group = Self::find_group_by_id_mut(&mut self.db.root, group_id)
-            .ok_or(NotFoundError("group"))?;
+        let group_id = GroupId::from_uuid(*group_id);
+        let mut group = self.db.group_mut(group_id).ok_or(NotFoundError("group"))?;
+
         group.name = name.to_string();
+
         Ok(())
     }
 
+    // Deleting sends the entry to the recycle bin, which is where every other
+    // client puts it and where the user expects to find it again. An entry
+    // already in the bin, or a database with no bin, is deleted outright, and a
+    // tombstone records the deletion so other clients replicate it.
     pub fn delete_entry(&mut self, entry_id: &Uuid) -> Result<()> {
-        if !Self::remove_entry_from_group(&mut self.db.root, entry_id) {
+        let entry_id = EntryId::from_uuid(*entry_id);
+
+        if self.db.entry(entry_id).is_none() {
             return Err(NotFoundError("entry").into());
         }
+
+        if let Some(bin_id) = self.recycle_bin_for(entry_id)? {
+            let mut entry = self.db.entry_mut(entry_id).ok_or(NotFoundError("entry"))?;
+            entry.edit_tracking(|entry| {
+                // the destination was just resolved, so it is there
+                let _ = entry.move_to(bin_id);
+            });
+            return Ok(());
+        }
+
+        let mut entry = self.db.entry_mut(entry_id).ok_or(NotFoundError("entry"))?;
+        entry.track_changes().remove();
+
         Ok(())
     }
 
-    // The parser drops the reference an entry holds to a file attached to it,
-    // and writing the database back therefore leaves every attachment in it
-    // orphaned: the bytes stay in the file, nothing points at them any more and
-    // no client shows them again. Refusing to write is the only way to keep
-    // them until the underlying library carries the reference through.
+    // The bin to send an entry to, or None when it is already in there and the
+    // next delete has to be permanent.
+    fn recycle_bin_for(&mut self, entry_id: EntryId) -> Result<Option<GroupId>> {
+        if self.db.meta.recyclebin_enabled == Some(false) {
+            return Ok(None);
+        }
+
+        if let Some(bin_id) = self.db.recycle_bin().map(|bin| bin.id()) {
+            let parent = self.db.entry(entry_id).ok_or(NotFoundError("entry"))?.parent().id();
+            if self.is_within(parent, bin_id) {
+                return Ok(None);
+            }
+            return Ok(Some(bin_id));
+        }
+
+        Ok(Some(self.create_recycle_bin()))
+    }
+
+    // Creates the bin the way clients do, on the first delete that needs it.
+    fn create_recycle_bin(&mut self) -> GroupId {
+        let bin_id = {
+            let mut root = self.db.root_mut();
+            let mut bin = root.add_group();
+            bin.name = RECYCLE_BIN_NAME.to_string();
+            bin.set_icon_builtin(RECYCLE_BIN_ICON);
+            bin.id()
+        };
+
+        self.db.meta.recyclebin_enabled = Some(true);
+        self.db.meta.recyclebin_uuid = Some(bin_id.uuid());
+        self.db.meta.recyclebin_changed = Some(keepass::db::Times::now());
+
+        bin_id
+    }
+
+    // Whether a group is the given ancestor or sits somewhere below it.
+    fn is_within(&self, group_id: GroupId, ancestor: GroupId) -> bool {
+        let mut current = Some(group_id);
+        while let Some(id) = current {
+            if id == ancestor {
+                return true;
+            }
+            current = self.db.group(id).and_then(|group| group.parent().map(|p| p.id()));
+        }
+        false
+    }
+
+    // Deleting a group takes everything under it, so it goes to the recycle bin
+    // as a whole. A group already in the bin is removed outright, and the root
+    // and the bin itself cannot be deleted at all.
+    pub fn delete_group(&mut self, group_id: &Uuid) -> Result<()> {
+        let group_id = GroupId::from_uuid(*group_id);
+
+        if self.db.group(group_id).is_none() {
+            return Err(NotFoundError("group").into());
+        }
+        if group_id == self.db.root().id() {
+            bail!("the root group cannot be deleted");
+        }
+
+        let bin_id = self.db.recycle_bin().map(|bin| bin.id());
+        if bin_id == Some(group_id) {
+            bail!("the recycle bin cannot be deleted");
+        }
+
+        let in_bin = bin_id.is_some_and(|bin_id| self.is_within(group_id, bin_id));
+        let disabled = self.db.meta.recyclebin_enabled == Some(false);
+
+        if in_bin || disabled {
+            let mut group = self.db.group_mut(group_id).ok_or(NotFoundError("group"))?;
+            group.track_changes().remove()?;
+            return Ok(());
+        }
+
+        let bin_id = match bin_id {
+            Some(id) => id,
+            None => self.create_recycle_bin(),
+        };
+
+        let mut group = self.db.group_mut(group_id).ok_or(NotFoundError("group"))?;
+        group.track_changes().move_to(bin_id)?;
+
+        Ok(())
+    }
+
+    // Moving an entry to another group, which is how a vault gets reorganised.
+    pub fn move_entry(&mut self, entry_id: &Uuid, group_id: &Uuid) -> Result<()> {
+        let entry_id = EntryId::from_uuid(*entry_id);
+        let group_id = GroupId::from_uuid(*group_id);
+
+        if self.db.group(group_id).is_none() {
+            return Err(NotFoundError("group").into());
+        }
+
+        let mut entry = self.db.entry_mut(entry_id).ok_or(NotFoundError("entry"))?;
+        entry.edit_tracking(|entry| {
+            // the destination was just checked, so it is there
+            let _ = entry.move_to(group_id);
+        });
+
+        Ok(())
+    }
+
+    // Moving a group under another one. A group cannot be moved into itself or
+    // into one of its own descendants, which the library rejects for us.
+    pub fn move_group(&mut self, group_id: &Uuid, parent_id: &Uuid) -> Result<()> {
+        let group_id = GroupId::from_uuid(*group_id);
+        let parent_id = GroupId::from_uuid(*parent_id);
+
+        if self.db.group(parent_id).is_none() {
+            return Err(NotFoundError("group").into());
+        }
+
+        let mut group = self.db.group_mut(group_id).ok_or(NotFoundError("group"))?;
+        group.track_changes().move_to(parent_id)?;
+
+        Ok(())
+    }
+
     pub fn attachment_count(&self) -> usize {
-        self.db.header_attachments.len()
+        self.db.num_attachments()
+    }
+
+    // The bytes of one file attached to an entry, so it can be downloaded.
+    pub fn get_file(&self, params: &Query<File>) -> Result<Vec<u8>> {
+        let entry_id = EntryId::from_uuid(params.entry_id);
+        let entry = self.db.entry(entry_id).ok_or(NotFoundError("entry"))?;
+
+        let attachment = entry.attachment_by_name(&params.filename)
+            .ok_or(NotFoundError("attachment"))?;
+
+        Ok(attachment.data.get().clone())
     }
 
     pub async fn to_backend_with_key(self, db_backend: &mut dyn DbBackend, db_key: DatabaseKey, user_info: &UserInfo) -> Result<()> {
-        if self.attachment_count() > 0 {
-            bail!(
-                "the database has {} file attachment(s), which saving would leave orphaned",
-                self.attachment_count(),
-            );
-        }
-
         let mut buf: Vec<u8> = vec![];
         let (result, mut buf) = tokio::task::spawn_blocking(move || {
             let r = self.db.save(&mut buf, db_key);
@@ -361,80 +496,67 @@ impl KeePass {
         let mut last_selected = self.db.meta.last_selected_group;
 
         if let Some(v) = last_selected {
-            if Self::find_group_by_id(&self.db.root, &v).is_none() {
+            if self.db.group(GroupId::from_uuid(v)).is_none() {
                 last_selected = None;
             }
         }
 
-        Ok(
-            (
-                Self::find_all_groups(&self.db.root),
-                last_selected,
-            )
-        )
+        Ok((Self::group_tree(&self.db.root()), last_selected))
     }
 
     pub fn get_group_entries(&self, params: &Query<Id>) -> Result<EntryGroup> {
-        let group = Self::find_group_by_id(&self.db.root, &params.id).ok_or(NotFoundError("group"))?;
+        let group = self.db.group(GroupId::from_uuid(params.id)).ok_or(NotFoundError("group"))?;
 
-        let mut entries = Vec::with_capacity(group.children.len());
-        for node in &group.children {
-            if let Node::Entry(entry) = node {
-                entries.push(
-                    // Populate (potentially) visible fields only
-                    Entry {
-                        id: entry.uuid,
-                        title: entry.get_title().map(String::from),
-                        username: entry.get_username().map(String::from),
-                        notes: None,
-                        strings: None,
-                        binary: None,
-                        protected: None,
-                        tags: None,
-                        icon: entry.icon_id,
-                        custom_icon_uuid: entry.custom_icon_uuid,
-                        url: entry.get_url().map(String::from),
-                    }
-                )
-            }
-        }
+        // Populate (potentially) visible fields only
+        let entries = group.entries()
+            .map(|entry| Entry {
+                id: entry.id().uuid(),
+                title: entry.get_title().map(String::from),
+                username: entry.get_username().map(String::from),
+                notes: None,
+                strings: None,
+                binary: None,
+                protected: None,
+                tags: None,
+                icon: builtin_icon(&entry.icon().cloned()),
+                custom_icon_uuid: custom_icon_uuid(&entry.icon().cloned()),
+                url: entry.get_url().map(String::from),
+                expires: None,
+                expiry: None,
+                times: None,
+                history: None,
+            })
+            .collect();
 
         Ok(EntryGroup {
-            id: group.uuid,
+            id: group.id().uuid(),
             title: group.name.clone(),
             entries,
-            icon: group.icon_id,
-            custom_icon_uuid: group.custom_icon_uuid,
+            icon: builtin_icon(&group.icon().cloned()),
+            custom_icon_uuid: custom_icon_uuid(&group.icon().cloned()),
         })
     }
 
     pub fn get_entry(&self, params: &Query<Id>) -> Result<Entry> {
-        let entry = Self::find_entry_by_id(&self.db.root, &params.id).ok_or(NotFoundError("entry"))?;
+        let entry = self.db.entry(EntryId::from_uuid(params.id)).ok_or(NotFoundError("entry"))?;
 
-        Ok(entry.into())
+        Ok(Entry::from(&entry))
     }
 
     pub fn get_protected(&self, params: &Query<Protected>) -> Result<SecretString> {
-        let entry = Self::find_entry_by_id(&self.db.root, &params.entry_id).ok_or(NotFoundError("entry"))?;
+        let entry = self.db.entry(EntryId::from_uuid(params.entry_id)).ok_or(NotFoundError("entry"))?;
 
-        let field = match params.name.as_str() {
-            "password" => entry.fields.get("Password").cloned(),
-            k => entry.fields.get(k).cloned(),
+        let name = match params.name.as_str() {
+            "password" => "Password",
+            k => k,
         };
 
-        let protected = match field {
-            Some(v) => match v {
-                Value::Protected(p) => p,
-                _ => bail!("not a protected field"),
-            },
-            None => return Err(NotFoundError("field").into()),
-        };
+        let field = entry.fields.get(name).ok_or(NotFoundError("field"))?;
+        if !field.is_protected() {
+            bail!("not a protected field");
+        }
 
-        Ok(
-            SecretString::new(
-                String::from_utf8_lossy(protected.unsecure()).to_string()
-            )
-        )
+        Ok(SecretString::new(field.get().clone()))
     }
 
     pub fn search_entries(&self, params: &Query<SearchTerm>) -> Result<EntryGroup> {
@@ -443,7 +565,11 @@ impl KeePass {
             term = regex::escape(&params.term);
         }
         let rgx = Regex::new(&format!("(?i){}", term))?;
-        let entries = Self::find_entries_by_string(&self.db.root, &rgx, &self.config.search);
+
+        let entries = self.db.iter_all_entries()
+            .map(|entry| Entry::from(&entry))
+            .filter(|entry| entry.matches_regex(&rgx, &self.config.search))
+            .collect();
 
         Ok(EntryGroup {
             id: Uuid::nil(),
@@ -455,141 +581,39 @@ impl KeePass {
         })
     }
 
-    pub fn get_icon(&self, params: &Path<Id>) -> Result<Icon> {
-        // TODO: can we improve this?
-        for icon in &self.db.meta.custom_icons.icons {
-            if icon.uuid == params.id {
-                return Ok(icon.clone());
-            }
-        }
-
-        Err(NotFoundError("icon").into())
+    pub fn get_icon(&self, params: &Path<Id>) -> Result<CustomIcon> {
+        self.db.iter_all_custom_icons()
+            .find(|icon| icon.id().uuid() == params.id)
+            .map(|icon| icon.clone())
+            .ok_or(NotFoundError("icon").into())
     }
 
-    pub(crate) fn find_all_groups(group: &keepass::db::Group) -> Group {
-        let mut children: Vec<Group> = Vec::with_capacity(group.children.len());
-        for node in &group.children {
-            if let Node::Group(group) = node {
-                children.push(Self::find_all_groups(group));
-            }
-        }
+    fn group_tree(group: &GroupRef<'_>) -> Group {
         Group {
-            id: group.uuid,
+            id: group.id().uuid(),
             title: group.name.clone(),
-            icon: group.icon_id,
-            custom_icon_uuid: None,
-            children,
+            icon: builtin_icon(&group.icon().cloned()),
+            custom_icon_uuid: custom_icon_uuid(&group.icon().cloned()),
+            children: group.groups().map(|child| Self::group_tree(&child)).collect(),
             expanded: group.is_expanded,
+            notes: group.notes.clone(),
         }
     }
+}
 
-    pub(crate) fn find_group_by_id<'a>(group: &'a keepass::db::Group, id: &Uuid) -> Option<&'a keepass::db::Group> {
-        if &group.uuid == id {
-            return Some(group);
-        }
-        for node in &group.children {
-            if let Node::Group(group) = node {
-                let found = Self::find_group_by_id(group, id);
-                if found.is_some() {
-                    return found;
-                }
-            }
-        }
-
-        None
+// The two icon shapes the client understands: a built-in index, or the uuid of
+// an icon stored in the database itself.
+pub(crate) fn builtin_icon(icon: &Option<Icon>) -> Option<usize> {
+    match icon {
+        Some(Icon::BuiltIn(id)) => Some(*id),
+        _ => None,
     }
+}
 
-    pub(crate) fn find_entry_by_id<'a>(group: &'a keepass::db::Group, id: &Uuid) -> Option<&'a keepass::db::Entry> {
-        for node in &group.children {
-            match node {
-                Node::Group(group) => {
-                    let found = Self::find_entry_by_id(group, id);
-                    if found.is_some() {
-                        return found;
-                    }
-                }
-                Node::Entry(entry) => {
-                    if &entry.uuid == id {
-                        return Some(entry);
-                    }
-                }
-            }
-        }
-
-        None
-    }
-
-    fn find_group_by_id_mut<'a>(group: &'a mut KpGroup, id: &Uuid) -> Option<&'a mut KpGroup> {
-        if &group.uuid == id {
-            return Some(group);
-        }
-        for node in &mut group.children {
-            if let Node::Group(g) = node {
-                let found = Self::find_group_by_id_mut(g, id);
-                if found.is_some() {
-                    return found;
-                }
-            }
-        }
-        None
-    }
-
-    fn find_entry_by_id_mut<'a>(group: &'a mut KpGroup, id: &Uuid) -> Option<&'a mut KpEntry> {
-        for node in &mut group.children {
-            match node {
-                Node::Group(g) => {
-                    let found = Self::find_entry_by_id_mut(g, id);
-                    if found.is_some() {
-                        return found;
-                    }
-                }
-                Node::Entry(e) => {
-                    if &e.uuid == id {
-                        return Some(e);
-                    }
-                }
-            }
-        }
-        None
-    }
-
-    fn remove_entry_from_group(group: &mut KpGroup, id: &Uuid) -> bool {
-        let before = group.children.len();
-        group.children.retain(|node| match node {
-            Node::Entry(e) => &e.uuid != id,
-            _ => true,
-        });
-        if group.children.len() < before {
-            return true;
-        }
-        for node in &mut group.children {
-            if let Node::Group(g) = node {
-                if Self::remove_entry_from_group(g, id) {
-                    return true;
-                }
-            }
-        }
-        false
-    }
-
-    pub(crate) fn find_entries_by_string(group: &keepass::db::Group, term: &Regex, config: &Search) -> Vec<Entry> {
-        let mut entries = vec![];
-
-        for node in &group.children {
-            match node {
-                Node::Group(group) => {
-                    entries.append(&mut Self::find_entries_by_string(group, term, config));
-                }
-                Node::Entry(entry) => {
-                    let entry: Entry = entry.into();
-                    if entry.matches_regex(term, config) {
-                        entries.push(entry);
-                    }
-                }
-            }
-        }
-
-        entries
+pub(crate) fn custom_icon_uuid(icon: &Option<Icon>) -> Option<Uuid> {
+    match icon {
+        Some(Icon::Custom(id)) => Some(id.uuid()),
+        _ => None,
     }
 }
 
@@ -633,10 +657,10 @@ mod tests {
         assert_eq!(keepass.db, dec.db);
     }
 
-    // saving cannot carry file attachments over yet, so it has to refuse
-    // rather than write a database that silently lost them
+    // saving used to leave attachments orphaned, so this is the case that has
+    // to keep working: the bytes come back out of a saved database unchanged
     #[tokio::test]
-    async fn saving_a_database_with_attachments_is_refused() {
+    async fn attachments_survive_a_save() {
         let params = DbLogin {
             password: Some("test".to_string()),
             key: None,
@@ -648,13 +672,34 @@ mod tests {
         backend.buf = fs::read("tests/test.kdbx").await.unwrap();
 
         let keepass = KeePass::from_backend(&config, &mut backend, &params, &user_info).await.unwrap();
-        assert!(keepass.attachment_count() > 0, "the fixture is expected to carry an attachment");
+        let before = keepass.attachment_count();
+        assert!(before > 0, "the fixture is expected to carry an attachment");
 
-        let before = backend.buf.clone();
-        let err = keepass.to_backend_with_key(&mut backend, db_key(), &user_info).await
-            .err().expect("saving must refuse");
+        let names: Vec<(Uuid, String, Vec<u8>)> = keepass.db.iter_all_entries()
+            .flat_map(|entry| {
+                entry.attachments_named()
+                    .map(|(name, attachment)| {
+                        (entry.id().uuid(), name.to_string(), attachment.data.get().clone())
+                    })
+                    .collect::<Vec<_>>()
+            })
+            .collect();
 
-        assert!(err.to_string().contains("attachment"), "{:#}", err);
-        assert_eq!(backend.buf, before, "the database must be left untouched");
+        keepass.to_backend_with_key(&mut backend, db_key(), &user_info).await.unwrap();
+
+        let after = KeePass::from_backend(&config, &mut backend, &params, &user_info).await.unwrap();
+        assert_eq!(after.attachment_count(), before, "an attachment was lost on save");
+
+        for (entry_id, name, data) in names {
+            let params = Query::from_query(&format!(
+                "entry_id={}&filename={}", entry_id, urlencoding(&name),
+            )).unwrap();
+
+            assert_eq!(after.get_file(&params).unwrap(), data, "'{}' came back different", name);
+        }
+    }
+
+    fn urlencoding(name: &str) -> String {
+        name.replace(' ', "%20").replace('&', "%26")
     }
 }

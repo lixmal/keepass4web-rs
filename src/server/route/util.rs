@@ -1,13 +1,13 @@
 use actix_session::Session;
 use actix_web::HttpResponse;
-use anyhow::{anyhow, bail};
-use log::{error, info};
+use anyhow::bail;
+use log::{debug, error, info};
 use serde_json::json;
 
 use crate::auth::{gen_token, SESSION_KEY_CSRF, SESSION_KEY_USER};
 use crate::auth_backend::UserInfo;
 use crate::config::config::Config;
-use crate::keepass::db_cache::{CacheExpiredError, DbCache};
+use crate::keepass::db_cache::{CacheExpiredError, DbCache, NotOpenError};
 use crate::keepass::keepass::KeePass;
 use crate::keepass::key::{KeyId, KeyUnavailableError, SecretKey};
 use crate::session::AuthSession;
@@ -93,7 +93,15 @@ pub(crate) async fn get_db(session: &Session, config: &Config, db_cache: &DbCach
     let enc = match db_cache.retrieve(session, config.db_session_timeout).await {
         Ok(v) => v,
         Err(err) => {
-            error!("failed to retrieve db: {}", err);
+            // a database that is not open yet, or has expired, is the ordinary
+            // state of a session before the master password is entered; only a
+            // cache that misbehaved is worth an error in the log
+            let closed = err.is::<NotOpenError>() || err.is::<CacheExpiredError>();
+            if closed {
+                debug!("db not open: {}", err);
+            } else {
+                error!("failed to retrieve db: {}", err);
+            }
 
             let resp = json!(
                 {
@@ -101,13 +109,12 @@ pub(crate) async fn get_db(session: &Session, config: &Config, db_cache: &DbCach
                     "message": "failed to retrieve db from cache",
                 }
             );
-            return match err.downcast_ref::<CacheExpiredError>() {
-                Some(_) => {
-                    _close_db(session, config, db_cache).await?;
+            return if closed {
+                _close_db(session, config, db_cache).await?;
 
-                    Err(HttpResponse::Unauthorized().json(resp))
-                }
-                None => Err(HttpResponse::InternalServerError().json(resp))
+                Err(HttpResponse::Unauthorized().json(resp))
+            } else {
+                Err(HttpResponse::InternalServerError().json(resp))
             };
         }
     };
@@ -115,7 +122,14 @@ pub(crate) async fn get_db(session: &Session, config: &Config, db_cache: &DbCach
     let key = match retrieve_key(config, session) {
         Ok(k) => k,
         Err(err) => {
-            error!("failed to retrieve key: {}", err);
+            // same again: a key that was never stored, or has expired, means
+            // the database is closed rather than that something went wrong
+            let closed = err.is::<KeyUnavailableError>();
+            if closed {
+                debug!("key not available: {}", err);
+            } else {
+                error!("failed to retrieve key: {}", err);
+            }
 
             let resp = json!(
                 {
@@ -124,13 +138,12 @@ pub(crate) async fn get_db(session: &Session, config: &Config, db_cache: &DbCach
                 }
             );
 
-            return match err.downcast_ref::<KeyUnavailableError>() {
-                Some(_) => {
-                    _close_db(session, config, db_cache).await?;
+            return if closed {
+                _close_db(session, config, db_cache).await?;
 
-                    Err(HttpResponse::Unauthorized().json(resp))
-                }
-                None => Err(HttpResponse::InternalServerError().json(resp))
+                Err(HttpResponse::Unauthorized().json(resp))
+            } else {
+                Err(HttpResponse::InternalServerError().json(resp))
             };
         }
     };
@@ -230,8 +243,10 @@ where
 }
 
 pub(crate) fn retrieve_key(config: &Config, session: &Session) -> anyhow::Result<SecretKey> {
+    // no key id in the session is a key that is missing, not a fault: the
+    // session was never unlocked, or has already been closed
     let key_id = session.get::<KeyId>(SESSION_KEY_KEY_ID)?
-        .ok_or(anyhow!("failed to retrieve key id from session"))?;
+        .ok_or(KeyUnavailableError)?;
 
     SecretKey::retrieve(&key_id, config.db_session_timeout, config.use_keyring)
 }

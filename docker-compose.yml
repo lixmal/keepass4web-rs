@@ -1,9 +1,8 @@
-version: "3.8"
 services:
   keepass4web-rs:
     image: ghcr.io/lixmal/keepass4web-rs:master
     ports:
-      - "8080:8080"
+      - "${APP_PORT:-8080}:8080"
     volumes:
       - ./config.yml:/conf/config.yml
       - ./tests/test.kdbx:/db.kdbx
@@ -13,7 +12,7 @@ services:
   ### Optional auth backends for testing ###
   #
   # The services below are disabled by default. To enable one:
-  #   1. cp .env.example .env   (example credentials, adjust if you like)
+  #   1. cp .env.example .env   (example credentials and ports, adjust if you like)
   #   2. remove the leading '#' from the service block you need
   #      (openldap for auth_backend: LDAP, keycloak for auth_backend: OIDC)
   #   3. update config.yml as shown below, then: docker compose up -d
@@ -25,7 +24,7 @@ services:
   #
   #   auth_backend: 'LDAP'
   #   LDAP:
-  #     uri: 'ldap://openldap:1389'        # 'ldap://127.0.0.1:1389' when running the app outside compose
+  #     uri: 'ldap://openldap:1389'        # 'ldap://127.0.0.1:1389' (LDAP_PORT) outside compose
   #     scope: 'subtree'
   #     base_dn: 'ou=users,dc=example,dc=org'
   #     filter: '(objectClass=inetOrgPerson)'
@@ -36,7 +35,7 @@ services:
   #openldap:
   #  image: docker.io/bitnamilegacy/openldap:2.6
   #  ports:
-  #    - "1389:1389"
+  #    - "${LDAP_PORT:-1389}:1389"
   #  environment:
   #    - LDAP_ROOT=${LDAP_ROOT}
   #    - LDAP_ADMIN_USERNAME=${LDAP_ADMIN_USERNAME}
@@ -48,26 +47,37 @@ services:
   #
   # The realm 'keepass' is imported automatically from tests/keycloak/realm.json:
   # confidential client 'keepass4web' (secret in .env.example) with the redirect
-  # URI http://localhost:8080/callback_user_auth, and user 'testuser' / 'testpass'.
-  # Admin console: http://localhost:8081 (KC_ADMIN_USERNAME / KC_ADMIN_PASSWORD from .env).
+  # URI http://localhost:8080/callback_user_auth (APP_PORT), and user 'testuser' / 'testpass'.
+  # Admin console: http://localhost:8081 (KC_PUBLIC_URL), credentials from .env.
+  #
+  # The browser and the app container reach Keycloak at different addresses, so
+  # the two are configured separately: `issuer` is the public URL the browser is
+  # redirected to and the tokens are trusted against, `discovery_url` is the
+  # compose-internal address the app reads the metadata from. --hostname pins
+  # Keycloak to the public URL so it declares the same issuer either way.
   # Matching config.yml settings (with the .env.example defaults):
   #
   #   auth_backend: 'OIDC'
   #   OIDC:
-  #     issuer: 'http://keycloak:8080/realms/keepass'   # 'http://localhost:8081/realms/keepass' outside compose
+  #     issuer: 'http://localhost:8081/realms/keepass'   # must equal KC_PUBLIC_URL
+  #     discovery_url: 'http://keycloak:8080/realms/keepass/.well-known/openid-configuration'
   #     client_id: 'keepass4web'
   #     client_secret: 'insecure-example-client-secret'
   #     save_id_token: true
   #     scopes:
   #       - 'profile'
   #
-  # Note: redirecting auth backends may require cookie_samesite: 'lax'.
+  #   # the redirect flow needs the session cookie to survive the return trip
+  #   cookie_samesite: 'lax'
+  #
+  # Drop discovery_url when the app runs outside compose: the browser and the
+  # app then share KC_PUBLIC_URL and there is nothing to split.
   #
   #keycloak:
   #  image: quay.io/keycloak/keycloak:26.0
-  #  command: start-dev --import-realm
+  #  command: start-dev --import-realm --hostname=${KC_PUBLIC_URL}
   #  ports:
-  #    - "8081:8080"
+  #    - "${KC_PORT:-8081}:8080"
   #  volumes:
   #    - ./tests/keycloak:/opt/keycloak/data/import:ro
   #  environment:

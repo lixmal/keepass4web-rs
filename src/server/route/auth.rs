@@ -382,14 +382,6 @@ async fn save_db(session: Session, config: Data<Config>, db_cache: Data<DbCache>
         }
     };
 
-    if keepass.attachment_count() > 0 {
-        info!("save_db from '{}': refused, the database has file attachments", username);
-        return HttpResponse::Conflict().json(json!({
-            "success": false,
-            "message": "this database has file attachments, which cannot be preserved when saving yet",
-        }));
-    }
-
     if let Err(err) = keepass.to_backend_with_key(db_backend.as_mut(), db_key, &user_info).await {
         error!("save_db from '{}': {}", username, err);
         return HttpResponse::InternalServerError().json(json!({
