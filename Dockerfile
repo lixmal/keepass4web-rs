@@ -4,7 +4,7 @@
 FROM --platform=$BUILDPLATFORM tonistiigi/xx:1.7.0 AS xx
 
 # Build the JS frontend on the native host platform (no QEMU overhead)
-FROM --platform=$BUILDPLATFORM node:20-alpine AS frontend
+FROM --platform=$BUILDPLATFORM node:26-alpine AS frontend
 WORKDIR /workspace
 COPY js js
 COPY public public
