@@ -92,7 +92,7 @@ jobs:
       # loaded into the daemon rather than discarded, so the steps below can
       # actually run the thing that was built
       - name: Build the image
-        uses: docker/build-push-action@263435318d21b8e681c14492fe198d362a7d2c83
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a
         with:
           context: .
           platforms: linux/amd64
@@ -106,7 +106,7 @@ jobs:
       # where an unpinned helper image or a toolchain the build never installed
       # stays invisible on the native target
       - name: Build the image for arm64
-        uses: docker/build-push-action@263435318d21b8e681c14492fe198d362a7d2c83
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a
         with:
           context: .
           platforms: linux/arm64
@@ -118,7 +118,7 @@ jobs:
       # unlock without breaking the build. the build stage runs on the host
       # platform, so its record of the selected flags can just be read back
       - name: Export the amd64 build stage
-        uses: docker/build-push-action@263435318d21b8e681c14492fe198d362a7d2c83
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a
         with:
           context: .
           target: build
