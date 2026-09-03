@@ -85,7 +85,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@v4
 
       # the image is only built when it is pushed to the registry, so a broken
       # Dockerfile would otherwise surface after a change reached master.
