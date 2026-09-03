@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1
 
 # Cross-compilation helper — resolves the correct toolchain for $TARGETPLATFORM
-FROM --platform=$BUILDPLATFORM tonistiigi/xx:1.7.0 AS xx
+FROM --platform=$BUILDPLATFORM tonistiigi/xx:1.9.0 AS xx
 
 # Build the JS frontend on the native host platform (no QEMU overhead)
 FROM --platform=$BUILDPLATFORM node:20-alpine AS frontend
