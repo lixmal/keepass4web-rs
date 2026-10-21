@@ -9,6 +9,7 @@ mod config;
 mod server;
 mod auth;
 mod keepass;
+mod audit;
 mod rate_limit;
 mod session;
 

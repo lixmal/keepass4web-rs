@@ -12,6 +12,21 @@ use crate::keepass::db_cache::DbCache;
 use crate::rate_limit::RateLimiter;
 use crate::server::route::setup_routes;
 
+// The bundle is the only script the app loads, and it is served from here.
+// Styles need 'unsafe-inline': the stylesheet is injected as a <style> element
+// at load and the components carry style attributes. That is a cosmetic
+// surface, not a scripting one.
+pub(crate) const CSP: &str = "default-src 'self'; \
+script-src 'self'; \
+style-src 'self' 'unsafe-inline'; \
+img-src 'self' data:; \
+font-src 'self'; \
+connect-src 'self'; \
+object-src 'none'; \
+base-uri 'none'; \
+frame-ancestors 'none'; \
+form-action 'self'";
+
 pub struct Server;
 
 impl Server {
@@ -58,10 +73,15 @@ impl Server {
                 .wrap(Logger::default())
                 // registered last = outermost, so the headers are also set on
                 // responses short-circuited by the middlewares above.
-                // CSP is omitted for now: the index page relies on
-                // inline script injection (see embed_in_index)
+                //
+                // A vault is exactly what script injected into this origin
+                // would go after, so scripts come from here and nowhere else.
+                // DefaultHeaders leaves a header a handler already set alone,
+                // which is what lets the login callback page send its own
+                // policy naming the nonce of the one script it inlines.
                 .wrap(
                     DefaultHeaders::new()
+                        .add(("Content-Security-Policy", CSP))
                         .add(("X-Frame-Options", "DENY"))
                         .add(("X-Content-Type-Options", "nosniff"))
                         .add(("Referrer-Policy", "no-referrer"))

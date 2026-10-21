@@ -24,6 +24,7 @@ class Viewport extends React.Component {
         this.onEntryDeleted = this.onEntryDeleted.bind(this)
         this.onAddRootGroup = this.onAddRootGroup.bind(this)
         this.onSaveDb       = this.onSaveDb.bind(this)
+        this.onSaveKeyfile  = this.onSaveKeyfile.bind(this)
         this.toggleSidebar  = this.toggleSidebar.bind(this)
 
         this.state = {
@@ -38,6 +39,11 @@ class Viewport extends React.Component {
             saveModal:    false,
             savePassword: '',
             saveStatus:   '',
+            // set when the vault was unlocked with a key file, so the save
+            // form asks for it again
+            usedKeyfile:  false,
+            saveKey:      '',
+            saveKeyName:  null,
         }
     }
 
@@ -245,13 +251,38 @@ class Viewport extends React.Component {
 
     // ── Save DB ───────────────────────────────────────────────────
 
+    // The save re-encrypts the database with what is sent, so it has to be the
+    // same credentials it was opened with. The key file is read here rather
+    // than kept from the unlock: the server never holds it either.
+    onSaveKeyfile(e) {
+        const file = e.target.files[0]
+        if (!file) {
+            this.setState({ saveKey: '', saveKeyName: null })
+            return
+        }
+
+        const reader = new FileReader()
+        reader.onload = () => this.setState({
+            saveKey: reader.result.split(',')[1],
+            saveKeyName: file.name,
+            saveStatus: '',
+        })
+        reader.readAsDataURL(file)
+    }
+
     onSaveDb(e) {
         e.preventDefault()
         this.setState({ saveStatus: 'Saving…' })
+
+        const data = { password: this.state.savePassword }
+        if (this.state.saveKey) data.key = this.state.saveKey
+
         KeePass4Web.fetch('save_db', {
             method: 'POST',
-            data: { password: this.state.savePassword },
-            success: () => this.setState({ saveModal: false, savePassword: '', saveStatus: '' }),
+            data,
+            success: () => this.setState({
+                saveModal: false, savePassword: '', saveKey: '', saveKeyName: null, saveStatus: '',
+            }),
             error: (err) => this.setState({ saveStatus: (err && (err.msg || err.toString())) || 'Save failed' }),
         })
     }
@@ -276,6 +307,12 @@ class Viewport extends React.Component {
                 })
             },
             error: KeePass4Web.error.bind(this),
+        })
+
+        KeePass4Web.fetch('authenticated', {
+            method: 'GET',
+            success: (data) => this.setState({ usedKeyfile: Boolean(data && data.used_keyfile) }),
+            error: () => {},
         })
     }
 
@@ -302,6 +339,7 @@ class Viewport extends React.Component {
                     </div>
                     <p style={{ fontSize: 13, color: 'var(--kp-text-muted)', marginBottom: 16 }}>
                         Re-enter the <strong>KeePass master password</strong> (not your login password) to write changes to the server file.
+                        {this.state.usedKeyfile && ' This vault was opened with a key file, so it is needed again.'}
                     </p>
                     <form onSubmit={this.onSaveDb}>
                         <div className="kp-field" style={{ marginBottom: 12 }}>
@@ -315,6 +353,22 @@ class Viewport extends React.Component {
                                 onChange={e => this.setState({ savePassword: e.target.value, saveStatus: '' })}
                             />
                         </div>
+                        {this.state.usedKeyfile && (
+                            <div className="kp-field" style={{ marginBottom: 12 }}>
+                                <label htmlFor="kp-save-keyfile">Key file</label>
+                                <input
+                                    id="kp-save-keyfile"
+                                    data-testid="save-keyfile"
+                                    type="file"
+                                    className="kp-visually-hidden"
+                                    onChange={this.onSaveKeyfile}
+                                />
+                                <label htmlFor="kp-save-keyfile"
+                                       className={`kp-file-label${this.state.saveKeyName ? ' has-file' : ''}`}>
+                                    {this.state.saveKeyName || 'Choose key file…'}
+                                </label>
+                            </div>
+                        )}
                         {this.state.saveStatus && (
                             <p style={{ color: 'var(--kp-danger)', fontSize: 13, marginBottom: 8 }}>
                                 {this.state.saveStatus}

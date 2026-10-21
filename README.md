@@ -18,6 +18,7 @@
   - [BACKENDS](#backends)
     - [Authentication Backends](#authentication-backends)
     - [Database Backends](#database-backends)
+  - [AUDIT TRAIL](#audit-trail)
   - [MISC](#misc)
   - [LIMITATIONS](#limitations)
   - [APP DETAILS / BACKGROUND](#app-details--background)
@@ -68,13 +69,10 @@ The minified, bundled file will be written to public/scripts/bundle.js
 - Install js modules
   > npm install
 
-- Copy bootstrap font files
-  > cp node_modules/bootstrap/fonts/* public/fonts/
-
 - Build js bundle
   > npm run build
 
-- For a non-uglified version you can run
+- For an unminified version you can run
   > npm run dev
 
 ## CONFIGURATION
@@ -175,7 +173,7 @@ Example docker:
       -p 8080:8080 -v ./config.yml:/conf/config.yml \
       -v ./tests/test.kdbx:/db.kdbx \
       --security-opt seccomp=seccomp/keyring.json \
-      ghcr.io/lixmal/keepass4web-rs:master
+      ghcr.io/lixmal/keepass4web-rs:main
 
 Example podman:
 
@@ -184,7 +182,7 @@ Example podman:
       -p 8080:8080 -v ./config.yml:/conf/config.yml \
       -v ./tests/test.kdbx:/db.kdbx \
       --security-opt seccomp=seccomp/keyring.json \
-      ghcr.io/lixmal/keepass4web-rs:master
+      ghcr.io/lixmal/keepass4web-rs:main
 
 (master password: `test`)
 
@@ -409,6 +407,34 @@ and the arm64 one does not.
 * **HTTP**
     * Fetches KeePass databases over HTTP/HTTPS.
     * Supports basic authentication and bearer token mechanisms.
+
+## AUDIT TRAIL
+
+What was done to the vault is recorded under its own log target, so it can be kept and routed separately
+from the ordinary application log:
+
+```bash
+RUST_LOG=warn,audit=info
+```
+
+```text
+[2026-08-29T10:23:23Z INFO  audit] user="alice" action=db.opened
+[2026-08-29T10:23:23Z INFO  audit] user="alice" action=entry.revealed id=2930242f-… field=Password
+[2026-08-29T10:23:23Z INFO  audit] user="alice" action=entry.revealed id=2930242f-… field=custom
+[2026-08-29T10:23:25Z INFO  audit] user="alice" action=db.saved
+```
+
+Recorded: the database being opened, closed and saved; a protected field being read; an attachment being
+downloaded; and entries and groups being created, changed, deleted or moved.
+
+**The trail never contains anything from inside the database.** No field values, and no names either:
+not entry titles, not group names, not attachment filenames. A record that held those would be a copy of
+the vault kept in a file that lives longer and is guarded less. Entries and groups are named by their
+identifier, and turning one back into an entry needs the database, which needs the master password.
+
+Field names are the one exception, and only the five the format defines (`Title`, `UserName`,
+`Password`, `URL`, `Notes`): those are not written by anyone. A custom field is named by whoever added
+it, closely enough to describe the secret it holds, so it is recorded as `custom`.
 
 ## MISC
 

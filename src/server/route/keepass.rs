@@ -8,6 +8,7 @@ use serde_json::json;
 use secrecy::ExposeSecret;
 use uuid::Uuid;
 
+use crate::audit;
 use crate::config::config::Config;
 use crate::keepass::db_cache::DbCache;
 use crate::keepass::keepass::{CustomField, EntryFields, File, Id, NotFoundError, Protected, SearchTerm};
@@ -232,6 +233,8 @@ async fn get_protected(session: Session, config: Data<Config>, db_cache: Data<Db
         }
     };
 
+    audit::revealed(&username, &params.entry_id, &params.name);
+
     HttpResponse::Ok().json(json!(
         {
             "success": true,
@@ -255,6 +258,8 @@ async fn get_file(session: Session, config: Data<Config>, db_cache: Data<DbCache
             return error_response(&err, "failed to get file");
         }
     };
+
+    audit::node(&username, audit::DOWNLOADED, &params.entry_id);
 
     // the name is the user's, so it goes in quoted and stripped of anything
     // that would let it break out of the header
@@ -384,6 +389,7 @@ async fn create_entry(session: Session, config: Data<Config>, db_cache: Data<DbC
         return err;
     }
 
+    audit::node(&username, audit::ENTRY_CREATED, &new_id);
     info!("create_entry from '{}': {}", username, new_id);
     HttpResponse::Ok().json(json!({ "success": true, "data": { "id": new_id } }))
 }
@@ -428,6 +434,7 @@ async fn update_entry(session: Session, config: Data<Config>, db_cache: Data<DbC
         return err;
     }
 
+    audit::node(&username, audit::ENTRY_UPDATED, &params.id);
     info!("update_entry from '{}': {}", username, params.id);
     HttpResponse::Ok().json(json!({ "success": true }))
 }
@@ -444,6 +451,7 @@ async fn create_group(session: Session, config: Data<Config>, db_cache: Data<DbC
         return err;
     }
 
+    audit::node(&username, audit::GROUP_CREATED, &new_id);
     info!("create_group from '{}': {} under {}", username, new_id, params.parent_id);
     HttpResponse::Ok().json(json!({ "success": true, "data": { "id": new_id } }))
 }
@@ -458,6 +466,7 @@ async fn rename_group(session: Session, config: Data<Config>, db_cache: Data<DbC
         return err;
     }
 
+    audit::node(&username, audit::GROUP_UPDATED, &params.id);
     info!("rename_group from '{}': {}", username, params.id);
     HttpResponse::Ok().json(json!({ "success": true }))
 }
@@ -472,6 +481,7 @@ async fn delete_entry(session: Session, config: Data<Config>, db_cache: Data<DbC
         return err;
     }
 
+    audit::node(&username, audit::ENTRY_DELETED, &params.id);
     info!("delete_entry from '{}': {}", username, params.id);
     HttpResponse::Ok().json(json!({ "success": true }))
 }
@@ -486,6 +496,7 @@ async fn delete_group(session: Session, config: Data<Config>, db_cache: Data<DbC
         return err;
     }
 
+    audit::node(&username, audit::GROUP_DELETED, &params.id);
     info!("delete_group from '{}': {}", username, params.id);
     HttpResponse::Ok().json(json!({ "success": true }))
 }
@@ -500,6 +511,7 @@ async fn move_entry(session: Session, config: Data<Config>, db_cache: Data<DbCac
         return err;
     }
 
+    audit::node(&username, audit::ENTRY_MOVED, &params.id);
     info!("move_entry from '{}': {} to {}", username, params.id, params.group_id);
     HttpResponse::Ok().json(json!({ "success": true }))
 }
@@ -514,6 +526,7 @@ async fn move_group(session: Session, config: Data<Config>, db_cache: Data<DbCac
         return err;
     }
 
+    audit::node(&username, audit::GROUP_MOVED, &params.id);
     info!("move_group from '{}': {} to {}", username, params.id, params.group_id);
     HttpResponse::Ok().json(json!({ "success": true }))
 }
