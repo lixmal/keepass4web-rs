@@ -97,17 +97,19 @@ test.describe('A database that needs a key file', () => {
   test('refuses a save with a master password that is not the current one', async ({ page }) => {
     await unlock(page);
 
-    const refused = await page.evaluate(async () => {
+    // the key file is sent along, so only the wrong password can cause the refusal
+    const key = fs.readFileSync(KEYFILE).toString('base64');
+    const refused = await page.evaluate(async ({ password, key }) => {
       const response = await fetch('api/v1/save_db', {
         method: 'POST',
         headers: {
           'X-CSRF-Token': localStorage.getItem('CSRFToken'),
           'Content-Type': 'application/x-www-form-urlencoded',
         },
-        body: 'password=not-the-master-password',
+        body: new URLSearchParams({ password, key }).toString(),
       });
       return response.status;
-    });
+    }, { password: 'not-the-master-password', key });
 
     expect(refused).toBe(401);
     expect(opens(true)).toBe(true);
