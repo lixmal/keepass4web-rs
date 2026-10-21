@@ -13,7 +13,7 @@ jobs:
     name: Lints
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       # gate on the bug-catching lint groups; style lints are not enforced yet
       - name: Clippy
         run: cargo clippy --all-targets -- -D clippy::correctness -D clippy::suspicious
