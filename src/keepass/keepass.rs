@@ -171,9 +171,10 @@ impl KeePass {
     /// Unlike [`Self::from_backend`] this never writes: a database that is not
     /// there cannot vouch for anything, and creating one to check against
     /// would accept any credentials at all.
-    pub async fn key_opens_stored(db_backend: &dyn DbBackend, params: &DbLogin, user_info: &UserInfo) -> Result<()> {
-        let db_key = Self::db_key_from_params(db_backend, params, user_info).await?;
-
+    ///
+    /// Takes the key the save will use, so validation and the save agree on
+    /// one snapshot of the key file rather than each reading it again.
+    pub async fn key_opens_stored(db_backend: &dyn DbBackend, db_key: DatabaseKey, user_info: &UserInfo) -> Result<()> {
         let mut buf = vec![];
         {
             let mut reader = db_backend.get_db_read(user_info).await?;
